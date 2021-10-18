@@ -33,7 +33,7 @@ var cfgFile string
 var credentials = types.GoogleAppCredentials{
 	Installed: types.InstalledType{
 		ClientId:                "984074116152-2mj5vshqb06c1gdlajlelfp9bdi6906e.apps.googleusercontent.com",
-		ProjectId:               "kronus-326712",
+		ProjectId:               "keep-up-326712",
 		AuthURI:                 "https://accounts.google.com/o/oauth2/auth",
 		TokenURI:                "https://oauth2.googleapis.com/token",
 		AuthProviderx509CertURL: "https://www.googleapis.com/oauth2/v1/certs",

@@ -83,6 +83,7 @@ Update config to include your `contacts` & `groups`.
 * Update tochbase command message
 * Publish go package
 * Support import of contacts from google csv
+* Ability to set `client_id` & `client_secret` via CLI
 * Ability to add/update contacts via CLI
 * Ability to add/update contacts via CLI
 * Ability to configure start date of touchbase events
