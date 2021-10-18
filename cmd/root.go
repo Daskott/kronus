@@ -92,13 +92,10 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// If no default config file is found, create one using config.template.yml
+		// If no default config file is found, create one using defaultConfigFileContent
 		configFilePath := filepath.Join(home, ".kronus.yaml")
 		if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-			data, err := ioutil.ReadFile("config.template.yml")
-			cobra.CheckErr(err)
-
-			err = ioutil.WriteFile(configFilePath, data, 0600)
+			err = ioutil.WriteFile(configFilePath, []byte(defaultConfigValue()), 0600)
 			cobra.CheckErr(err)
 		}
 
@@ -114,4 +111,39 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+// defaultConfigValue returns the default content for .kronus.yaml
+func defaultConfigValue() string {
+	return `env: production
+settings:
+ timezone: "America/Toronto"
+ touchbase-recurrence: "RRULE:FREQ=WEEKLY;"
+
+# Here you update your contact list with their names.
+# e.g.
+# contacts:
+# - name: Smally
+# - name: Dad
+# 
+contacts:
+
+# Here you add the different groups you'd like to have for your
+# contacts. And populate each group with 
+# each contact's id(i.e. index of their record in contacts)
+# e.g. 
+# groups:
+#   friends:
+#     - 0
+#     - 1
+#   family:
+#     - 2
+# 
+groups:
+
+
+# This section is automatically updated by the CLI App to manage
+# events created by kronus
+events:
+`
 }
