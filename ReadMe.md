@@ -1,5 +1,5 @@
 # Kronus
-A CLI App to help you stay in touch with the people that matter by leveraging the [google calender API]().
+A CLI App to help you stay in touch with the people that matter by leveraging the [google calender API](https://developers.google.com/calendar/api/guides/overview).
 You can create `touchbase` events for contacts in any group, up to a Max of **7** contacts.
 ```
 The application is a tool to generate recurring google calender events for each of your contacts,
