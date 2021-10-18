@@ -73,15 +73,14 @@ Update config to include your `contacts` & `groups`.
   ```
 
 ## Development
-- Checkout repo
+- Checkout repo: `git clone https://github.com/Daskott/kronus.git`
 - In root dir from terminal run `go run main.go` for root cmd or `go run main.go touchbase --group=<your_group>` for touchbase cmd
 
 ## Todo:
 * Enforce max number of people to tochbase with - **5**
 * Manage version changes to config files --version
 * Write tests
-* Clean up completion command
-* Update command message
+* Update tochbase command message
 * Publish go package
 * Support import of contacts from google csv
 * Ability to add/update contacts via CLI
