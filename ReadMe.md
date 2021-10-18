@@ -1,5 +1,6 @@
 # Kronus
-A CLI App to help with staying in touch with the people that matter
+A CLI App to help you stay in touch with the people that matter by leveraging the [google calender API]().
+You can create `touchbase` events for contacts in any group, up to a Max of **7** contacts.
 ```
 The application is a tool to generate recurring google calender events for each of your contacts,
 to remind you to reach out and see how they are doing :)
@@ -19,7 +20,7 @@ Flags:
 ```
 
 ## How to use it
-- Run `go get kronus` in terminal to install package **(WIP)**
+- Run `go get kronus` in terminal to install package
 - In terminal run `kronus touchbase --group=family` to create re-curring event on google calendar
   - Supported touchbase flags include:
     ```
@@ -73,15 +74,17 @@ Update config to include your `contacts` & `groups`.
   ```
 
 ## Development
-- Checkout repo: `git clone https://github.com/Daskott/kronus.git`
+- Checkout repo: 
+  ```
+  git clone https://github.com/Daskott/kronus.git
+  ```
 - In root dir from terminal run `go run main.go` for root cmd or `go run main.go touchbase --group=<your_group>` for touchbase cmd
 
 ## Todo:
-* Enforce max number of people to tochbase with - **5**
-* Manage version changes to config files --version
 * Write tests
-* Update tochbase command message
-* Publish go package
+* Add support for --version flag
+* Ability to change event title
+* Add flag to make deletion of previous events optional
 * Support import of contacts from google csv
 * Ability to set `client_id` & `client_secret` via CLI
 * Ability to add/update contacts via CLI

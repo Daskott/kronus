@@ -25,11 +25,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+const maxContactsToTochbaseWith = 7
+
 // touchbaseCmd represents the touchbase command
 var touchbaseCmd = &cobra.Command{
 	Use:   "touchbase",
-	Short: "Deletes all exisiting events and creates new ones based on configs",
-	Long: `Deletes all exisiting google calender events created by kronus
+	Short: "Deletes previous touchbase events and creates new ones based on configs",
+	Long: `Deletes previous touchbase google calender events created by kronus
 and creates new ones to match the values set in groups.yml and contacts.yml.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		syncEvents()
@@ -87,10 +89,22 @@ func syncEvents() {
 	// Clear any events previously created by touchbase
 	err = googleAPI.ClearAllEvents(viper.GetStringSlice("events"))
 	if err != nil {
-		fmt.Printf("Warning: %v\n\n", err)
+		fmt.Printf("%s %v\n", warningLabel, err)
 	}
 
-	eventIds, err := googleAPI.CreateEvents(groupContacts, slotStartTime, slotEndTime, eventRecurrence)
+	if len(groupContacts) > maxContactsToTochbaseWith {
+		groupContacts = groupContacts[:maxContactsToTochbaseWith]
+		fmt.Printf("%s Touchbase events are created for a Max of %v contacts."+
+			"\nEvents will be created for ONLY the top 7 contacts in '%s'."+
+			"\nPlease update the group accordingly, if you'd like to create events for a different set of contacts.\n",
+			warningLabel, maxContactsToTochbaseWith, groupArg)
+	}
+
+	eventIds, err := googleAPI.CreateEvents(
+		groupContacts,
+		slotStartTime,
+		slotEndTime, eventRecurrence,
+	)
 	cobra.CheckErr(err)
 
 	// Save created eventIds to config file

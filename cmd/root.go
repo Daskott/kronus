@@ -23,6 +23,7 @@ import (
 
 	"github.com/Daskott/kronus/googleservice"
 	"github.com/Daskott/kronus/types"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
 	"github.com/spf13/viper"
@@ -56,6 +57,10 @@ to remind you to reach out and see how they are doing :)`,
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
 }
+
+var yellow = color.New(color.FgYellow).SprintFunc()
+
+var warningLabel = yellow("Warning:")
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
