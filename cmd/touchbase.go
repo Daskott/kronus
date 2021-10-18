@@ -32,7 +32,7 @@ var touchbaseCmd = &cobra.Command{
 	Use:   "touchbase",
 	Short: "Deletes previous touchbase events and creates new ones based on configs",
 	Long: `Deletes previous touchbase google calender events created by kronus
-and creates new ones(up to a max of 7 contacts for a group) to match the values set in groups.yml and contacts.yml.`,
+and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
 	Run: func(cmd *cobra.Command, args []string) {
 		syncEvents()
 	},
