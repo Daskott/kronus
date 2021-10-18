@@ -49,7 +49,7 @@ var googleAPI = googleservice.NewGoogleCalendarAPI(credentials)
 var rootCmd = &cobra.Command{
 	Use: "kronus",
 	Short: `kronus is a CLI library for Go that allows you to create
-coffee chat appointments with select contacts.
+coffee chat appointments with your contacts.
 
 The application is a tool to generate recurring google calender events for each of your contacts,
 to remind you to reach out and see how they are doing :)`,

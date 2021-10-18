@@ -20,7 +20,10 @@ Flags:
 ```
 
 ## How to use it
-- Run `go get kronus` in terminal to install package
+- To install, run:
+  ```
+  go get -u github.com/Daskott/kronus
+  ```
 - In terminal run `kronus touchbase --group=family` to create re-curring event on google calendar
   - Supported touchbase flags include:
     ```
@@ -37,7 +40,7 @@ The config file is created in `$HOME/.kronus.yaml` if you've run the App at leas
 
 You can also create the config file manually in the default path if you choose. Or a new path & tell `kronus` where to find it using the `--config` flag.
 
-Update config to include your `contacts` & `groups`. 
+Update config to include your `timezone`, `contacts` & `groups`. 
   ```yml
   env: production
   settings:
