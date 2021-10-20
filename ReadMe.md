@@ -81,7 +81,18 @@ Update config to include your `timezone`, `contacts` & `groups`.
   ```
   git clone https://github.com/Daskott/kronus.git
   ```
-- In root dir from terminal run `go run main.go` for root cmd or `go run main.go touchbase --group=<your_group>` for touchbase cmd
+- To run `rootCmd`: 
+  ```
+  go run main.go
+  ```
+- To run `touchbaseCmd`: 
+  ```
+  go run main.go touchbase
+  ```
+- To run tests: 
+  ```
+  go test ./...
+  ```
 
 ## Todo:
 * Write tests

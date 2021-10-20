@@ -27,37 +27,41 @@ import (
 
 const maxContactsToTochbaseWith = 7
 
-// touchbaseCmd represents the touchbase command
-var touchbaseCmd = &cobra.Command{
-	Use:   "touchbase",
-	Short: "Deletes previous touchbase events and creates new ones based on configs",
-	Long: `Deletes previous touchbase google calender events created by kronus
-and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
-	Run: func(cmd *cobra.Command, args []string) {
-		syncEvents()
-	},
-}
-
-var countArg int
-var frequencyArg int
-var groupArg string
-var timeSlotArg string
-
-var intervals = []int{
-	1, // weekly
-	2, // bi-weekly
-	4, // monthly
-}
+var (
+	countArg     int
+	frequencyArg int
+	groupArg     string
+	timeSlotArg  string
+	intervals    = []int{
+		1, // weekly
+		2, // bi-weekly
+		4, // monthly
+	}
+)
 
 func init() {
-	rootCmd.AddCommand(touchbaseCmd)
+	rootCmd.AddCommand(createTouchbaseCmd())
+}
 
-	touchbaseCmd.Flags().IntVarP(&countArg, "count", "c", 4, "How many times you want to touchbase with members of a group")
-	touchbaseCmd.Flags().StringVarP(&groupArg, "group", "g", "", "Group to create touchbase events for")
-	touchbaseCmd.Flags().IntVarP(&frequencyArg, "freq", "f", 1, "How often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly")
-	touchbaseCmd.Flags().StringVarP(&timeSlotArg, "time-slot", "t", "18:00-18:30", "Time slot in the day allocated for touching base")
+func createTouchbaseCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "touchbase",
+		Short: "Deletes previous touchbase events and creates new ones based on configs",
+		Long: `Deletes previous touchbase google calender events created by kronus
+	and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
+		Run: func(cmd *cobra.Command, args []string) {
+			syncEvents()
+		},
+	}
 
-	touchbaseCmd.MarkFlagRequired("group")
+	cmd.Flags().IntVarP(&countArg, "count", "c", 4, "How many times you want to touchbase with members of a group")
+	cmd.Flags().StringVarP(&groupArg, "group", "g", "", "Group to create touchbase events for")
+	cmd.Flags().IntVarP(&frequencyArg, "freq", "f", 1, "How often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly")
+	cmd.Flags().StringVarP(&timeSlotArg, "time-slot", "t", "18:00-18:30", "Time slot in the day allocated for touching base")
+
+	cmd.MarkFlagRequired("group")
+
+	return cmd
 }
 
 func syncEvents() {

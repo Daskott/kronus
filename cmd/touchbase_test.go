@@ -1,8 +1,15 @@
 package cmd
 
-import "testing"
+import (
+	"testing"
 
-func TestTouchbase(t *testing.T) {
-	// I promise it's coming 😅
-	touchbaseCmd.Execute()
+	"github.com/stretchr/testify/assert"
+)
+
+func TestTouchbaseCmdWithMissingRequiredFlag(t *testing.T) {
+	tbCmd := createTouchbaseCmd()
+
+	err := tbCmd.Execute()
+	assert.Equal(t, "required flag(s) \"group\" not set", err.Error(),
+		"touchbaseCmd shoud fail if --group is not provided")
 }
