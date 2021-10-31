@@ -94,14 +94,6 @@ Update config to include your `timezone`, `contacts` & `groups`.
   go test ./...
   ```
 
-## Todo:
-* Write tests
-* Add support for --version flag
-* Ability to change event title
-* Add flag to make deletion of previous events optional
-* Support import of contacts from google csv
-* Ability to set `client_id` & `client_secret` via CLI
-* Ability to add/update contacts via CLI
-* Ability to add/update contacts via CLI
-* Ability to configure start date of touchbase events
-* List events via CLI
+## Publishing package
+* Update `Version` in `version.go`
+* Follow steps https://golang.org/doc/modules/publishing
