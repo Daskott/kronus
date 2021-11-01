@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,8 +25,19 @@ func TestTouchbaseCmd(t *testing.T) {
 		actualOut string
 	)
 
+	// Save cfgFile before stubbing it out
+	// And revert to prev cfgFile after test is done
+	savedCfgFile := cfgFile
+	defer func() {
+		cfgFile = savedCfgFile
+	}()
+
+	// Set cfgFile to point to test config.yml
+	path, _ := os.Getwd()
+	cfgFile = filepath.Join(path, "test-fixtures", "config.yml")
+
 	// Save googleAPI before stubbing it out
-	// And revert to prod googleAPI after test is done
+	// And revert to prev googleAPI after test is done
 	saveGoogleAPI := googleAPI
 	defer func() {
 		googleAPI = saveGoogleAPI
@@ -39,8 +52,8 @@ func TestTouchbaseCmd(t *testing.T) {
 			msgError:    "Should fail because group flag is required",
 		},
 		{
-			args:        []string{"--group", "coffee"},
-			expectedOut: "appointments with members of coffee have been created",
+			args:        []string{"--group", "family"},
+			expectedOut: "appointments with members of family have been created",
 			msgError:    "Should create touchbase events for contacts in test group",
 		},
 	}
@@ -58,6 +71,6 @@ func TestTouchbaseCmd(t *testing.T) {
 		tbCmd.Execute()
 
 		actualOut = buff.String()
-		assert.True(t, strings.Contains(actualOut, c.expectedOut))
+		assert.True(t, strings.Contains(actualOut, c.expectedOut), c.msgError)
 	}
 }

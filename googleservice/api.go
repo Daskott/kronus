@@ -20,14 +20,17 @@ import (
 )
 
 type GCalendarAPIInterface interface {
+	// CreateEvents creates google calendar events for the given contacts and returns the eventIDs and error(if any)
 	CreateEvents(
 		groupContacts []types.Contact,
 		slotStartTime,
 		slotEndTime,
 		eventRecurrence string) ([]string, error)
 
+	// CreateEvent creates a google calendar event and returns the event ID
 	CreateEvent(contact, startTime, endTime, recurrence string) (string, error)
 
+	// ClearAllEvents deletes all google calendar events for eventIDs
 	ClearAllEvents(eventIDs []string) error
 }
 
@@ -88,7 +91,6 @@ func (gcalAPI GCalendarAPI) CreateEvents(
 	return eventIds, nil
 }
 
-// Create a google calendar event and return the event ID
 func (gcalAPI GCalendarAPI) CreateEvent(contact, startTime, endTime, recurrence string) (string, error) {
 	event := &calendar.Event{
 		Summary:     fmt.Sprintf("☕ Coffee chat with %s", contact),

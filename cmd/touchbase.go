@@ -22,7 +22,6 @@ import (
 
 	"github.com/Daskott/kronus/types"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const maxContactsToTochbaseWith = 7
@@ -50,7 +49,7 @@ func createTouchbaseCmd() *cobra.Command {
 		Long: `Deletes previous touchbase google calender events created by kronus
 	and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
 		Run: func(cmd *cobra.Command, args []string) {
-			syncEvents(cmd)
+			runtTouchbase(cmd)
 		},
 	}
 
@@ -64,7 +63,7 @@ func createTouchbaseCmd() *cobra.Command {
 	return cmd
 }
 
-func syncEvents(cmd *cobra.Command) {
+func runtTouchbase(cmd *cobra.Command) {
 	err := validateFlags()
 	cobra.CheckErr(err)
 
@@ -72,26 +71,26 @@ func syncEvents(cmd *cobra.Command) {
 
 	eventRecurrence := eventRecurrence()
 
-	selectedGroupContactIds := viper.GetStringSlice(fmt.Sprintf("groups.%s", groupArg))
+	selectedGroupContactIds := config.GetStringSlice(fmt.Sprintf("groups.%s", groupArg))
 	if len(selectedGroupContactIds) == 0 {
 		cmd.Printf("\nNo contacts in '%s' group. Try creating '%s' and adding some contacts to it."+
-			"\nUpdate app config in %s\n", groupArg, groupArg, viper.ConfigFileUsed())
+			"\nUpdate app config in %s\n", groupArg, groupArg, config.ConfigFileUsed())
 		return
 	}
 
 	contacts := []types.Contact{}
-	err = viper.UnmarshalKey("contacts", &contacts)
+	err = config.UnmarshalKey("contacts", &contacts)
 	cobra.CheckErr(err)
 
 	groupContacts := filterContactsByIDs(contacts, selectedGroupContactIds)
 	if len(groupContacts) == 0 {
 		cmd.Printf("\nUnable to find any contact details for members of '%s'."+
-			"\nTry updating '%s' group in app config located in %s\n", groupArg, groupArg, viper.ConfigFileUsed())
+			"\nTry updating '%s' group in app config located in %s\n", groupArg, groupArg, config.ConfigFileUsed())
 		return
 	}
 
 	// Clear any events previously created by touchbase
-	err = googleAPI.ClearAllEvents(viper.GetStringSlice("events"))
+	err = googleAPI.ClearAllEvents(config.GetStringSlice("events"))
 	if err != nil {
 		cmd.Printf("%s %v\n", warningLabel, err)
 	}
@@ -112,8 +111,8 @@ func syncEvents(cmd *cobra.Command) {
 	cobra.CheckErr(err)
 
 	// Save created eventIds to config file
-	viper.Set("events", eventIds)
-	viper.WriteConfig()
+	config.Set("events", eventIds)
+	config.WriteConfig()
 
 	cmd.Printf("\nAll touchbase appointments with members of %s have been created!\n", groupArg)
 }
@@ -132,7 +131,7 @@ func validateFlags() error {
 }
 
 func eventRecurrence() string {
-	return viper.GetString("settings.touchbase-recurrence") +
+	return config.GetString("settings.touchbase-recurrence") +
 		fmt.Sprintf("COUNT=%d;INTERVAL=%d;", countArg, intervals[frequencyArg])
 }
 

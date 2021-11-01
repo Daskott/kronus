@@ -30,21 +30,26 @@ import (
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	cfgFile   string
+	config    *viper.Viper
+	googleAPI googleservice.GCalendarAPIInterface
 
-var credentials = types.GoogleAppCredentials{
-	Installed: types.InstalledType{
-		ClientId:                "984074116152-2mj5vshqb06c1gdlajlelfp9bdi6906e.apps.googleusercontent.com",
-		ProjectId:               "keep-up-326712",
-		AuthURI:                 "https://accounts.google.com/o/oauth2/auth",
-		TokenURI:                "https://oauth2.googleapis.com/token",
-		AuthProviderx509CertURL: "https://www.googleapis.com/oauth2/v1/certs",
-		ClientSecret:            "WHLhwFpDEv-60vpH2TSPlsVB",
-		RedirectUris:            []string{"urn:ietf:wg:oauth:2.0:oob", "http://localhost"},
-	},
-}
+	yellow       = color.New(color.FgYellow).SprintFunc()
+	warningLabel = yellow("Warning:")
 
-var googleAPI googleservice.GCalendarAPIInterface
+	credentials = types.GoogleAppCredentials{
+		Installed: types.InstalledType{
+			ClientId:                "984074116152-2mj5vshqb06c1gdlajlelfp9bdi6906e.apps.googleusercontent.com",
+			ProjectId:               "keep-up-326712",
+			AuthURI:                 "https://accounts.google.com/o/oauth2/auth",
+			TokenURI:                "https://oauth2.googleapis.com/token",
+			AuthProviderx509CertURL: "https://www.googleapis.com/oauth2/v1/certs",
+			ClientSecret:            "WHLhwFpDEv-60vpH2TSPlsVB",
+			RedirectUris:            []string{"urn:ietf:wg:oauth:2.0:oob", "http://localhost"},
+		},
+	}
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -54,14 +59,7 @@ coffee chat appointments with your contacts.
 
 The application is a tool to generate recurring google calender events for each of your contacts,
 to remind you to reach out and see how they are doing :)`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
-
-var yellow = color.New(color.FgYellow).SprintFunc()
-
-var warningLabel = yellow("Warning:")
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -80,9 +78,11 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	config = viper.New()
+
 	if cfgFile != "" {
 		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
+		config.SetConfigFile(cfgFile)
 	} else {
 		// Find home directory.
 		home, err := os.UserHomeDir()
@@ -96,16 +96,16 @@ func initConfig() {
 		}
 
 		// Search config in home directory with name ".kronus" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName(".kronus")
+		config.AddConfigPath(home)
+		config.SetConfigType("yaml")
+		config.SetConfigName(".kronus")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	config.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	if err := config.ReadInConfig(); err == nil {
+		fmt.Fprintln(os.Stderr, "Using config file:", config.ConfigFileUsed())
 	}
 }
 

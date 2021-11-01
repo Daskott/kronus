@@ -1,0 +1,12 @@
+contacts:
+- name: Smally
+- name: Dad
+env: production
+events: []
+groups:
+  family:
+  - 0
+  - 1
+settings:
+  timezone: America/Toronto
+  touchbase-recurrence: RRULE:FREQ=WEEKLY;
