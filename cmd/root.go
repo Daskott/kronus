@@ -44,7 +44,7 @@ var credentials = types.GoogleAppCredentials{
 	},
 }
 
-var googleAPI = googleservice.NewGoogleCalendarAPI(credentials)
+var googleAPI googleservice.GCalendarAPIInterface
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -71,6 +71,7 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+	googleAPI = googleservice.NewGoogleCalendarAPI(credentials)
 	rootCmd.Version = fmt.Sprintf("v%s", version.Version)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")

@@ -50,7 +50,7 @@ func createTouchbaseCmd() *cobra.Command {
 		Long: `Deletes previous touchbase google calender events created by kronus
 	and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
 		Run: func(cmd *cobra.Command, args []string) {
-			syncEvents()
+			syncEvents(cmd)
 		},
 	}
 
@@ -64,7 +64,7 @@ func createTouchbaseCmd() *cobra.Command {
 	return cmd
 }
 
-func syncEvents() {
+func syncEvents(cmd *cobra.Command) {
 	err := validateFlags()
 	cobra.CheckErr(err)
 
@@ -74,7 +74,7 @@ func syncEvents() {
 
 	selectedGroupContactIds := viper.GetStringSlice(fmt.Sprintf("groups.%s", groupArg))
 	if len(selectedGroupContactIds) == 0 {
-		fmt.Printf("\nNo contacts in '%s' group. Try creating '%s' and adding some contacts to it."+
+		cmd.Printf("\nNo contacts in '%s' group. Try creating '%s' and adding some contacts to it."+
 			"\nUpdate app config in %s\n", groupArg, groupArg, viper.ConfigFileUsed())
 		return
 	}
@@ -85,7 +85,7 @@ func syncEvents() {
 
 	groupContacts := filterContactsByIDs(contacts, selectedGroupContactIds)
 	if len(groupContacts) == 0 {
-		fmt.Printf("\nUnable to find any contact details for members of '%s'."+
+		cmd.Printf("\nUnable to find any contact details for members of '%s'."+
 			"\nTry updating '%s' group in app config located in %s\n", groupArg, groupArg, viper.ConfigFileUsed())
 		return
 	}
@@ -93,12 +93,12 @@ func syncEvents() {
 	// Clear any events previously created by touchbase
 	err = googleAPI.ClearAllEvents(viper.GetStringSlice("events"))
 	if err != nil {
-		fmt.Printf("%s %v\n", warningLabel, err)
+		cmd.Printf("%s %v\n", warningLabel, err)
 	}
 
 	if len(groupContacts) > maxContactsToTochbaseWith {
 		groupContacts = groupContacts[:maxContactsToTochbaseWith]
-		fmt.Printf("%s Touchbase events are created for a Max of %v contacts."+
+		cmd.Printf("%s Touchbase events are created for a Max of %v contacts."+
 			"\nEvents will be created for ONLY the top 7 contacts in '%s'."+
 			"\nPlease update the group accordingly, if you'd like to create events for a different set of contacts.\n",
 			warningLabel, maxContactsToTochbaseWith, groupArg)
@@ -115,7 +115,7 @@ func syncEvents() {
 	viper.Set("events", eventIds)
 	viper.WriteConfig()
 
-	fmt.Printf("\nAll touchbase appointments with members of %s have been created!\n", groupArg)
+	cmd.Printf("\nAll touchbase appointments with members of %s have been created!\n", groupArg)
 }
 
 func validateFlags() error {
