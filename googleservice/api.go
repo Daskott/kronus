@@ -19,13 +19,28 @@ import (
 	"google.golang.org/api/option"
 )
 
-type GoogleCalendarAPI struct {
-	Service *calendar.Service
+type GCalendarAPIInterface interface {
+	// CreateEvents creates google calendar events for the given contacts and returns the eventIDs and error(if any)
+	CreateEvents(
+		groupContacts []types.Contact,
+		slotStartTime,
+		slotEndTime,
+		eventRecurrence string) ([]string, error)
+
+	// CreateEvent creates a google calendar event and returns the event ID
+	CreateEvent(contact, startTime, endTime, recurrence string) (string, error)
+
+	// ClearAllEvents deletes all google calendar events for eventIDs
+	ClearAllEvents(eventIDs []string) error
+}
+
+type GCalendarAPI struct {
+	service *calendar.Service
 }
 
 const calendarId = "primary"
 
-func NewGoogleCalendarAPI(credentials types.GoogleAppCredentials) *GoogleCalendarAPI {
+func NewGoogleCalendarAPI(credentials types.GoogleAppCredentials) *GCalendarAPI {
 	ctx := context.Background()
 	b, err := json.Marshal(credentials)
 	if err != nil {
@@ -44,10 +59,10 @@ func NewGoogleCalendarAPI(credentials types.GoogleAppCredentials) *GoogleCalenda
 		log.Fatalf("Unable to retrieve Calendar client: %v", err)
 	}
 
-	return &GoogleCalendarAPI{Service: calendarService}
+	return &GCalendarAPI{service: calendarService}
 }
 
-func (gcalAPI GoogleCalendarAPI) CreateEvents(
+func (gcalAPI GCalendarAPI) CreateEvents(
 	groupContacts []types.Contact,
 	slotStartTime,
 	slotEndTime,
@@ -64,7 +79,10 @@ func (gcalAPI GoogleCalendarAPI) CreateEvents(
 		eventId, err := gcalAPI.CreateEvent(user.Name, startStr, endStr, eventRecurrence)
 		if err != nil {
 			// Create all events or no event
-			gcalAPI.ClearAllEvents(eventIds)
+			delErr := gcalAPI.ClearAllEvents(eventIds)
+			if delErr != nil {
+				err = fmt.Errorf("%v; %v", err, delErr)
+			}
 			return nil, fmt.Errorf("unable to create event. %v", err)
 		}
 		eventIds = append(eventIds, eventId)
@@ -76,8 +94,7 @@ func (gcalAPI GoogleCalendarAPI) CreateEvents(
 	return eventIds, nil
 }
 
-// Create a google calendar event and return the event ID
-func (gcalAPI GoogleCalendarAPI) CreateEvent(contact, startTime, endTime, recurrence string) (string, error) {
+func (gcalAPI GCalendarAPI) CreateEvent(contact, startTime, endTime, recurrence string) (string, error) {
 	event := &calendar.Event{
 		Summary:     fmt.Sprintf("☕ Coffee chat with %s", contact),
 		Location:    "",
@@ -103,7 +120,7 @@ func (gcalAPI GoogleCalendarAPI) CreateEvent(contact, startTime, endTime, recurr
 		Attendees: []*calendar.EventAttendee{},
 	}
 
-	event, err := gcalAPI.Service.Events.Insert(calendarId, event).Do()
+	event, err := gcalAPI.service.Events.Insert(calendarId, event).Do()
 	if err != nil {
 		return "", err
 	}
@@ -111,12 +128,12 @@ func (gcalAPI GoogleCalendarAPI) CreateEvent(contact, startTime, endTime, recurr
 	return event.Id, nil
 }
 
-func (gcalAPI GoogleCalendarAPI) ClearAllEvents(eventIDs []string) error {
+func (gcalAPI GCalendarAPI) ClearAllEvents(eventIDs []string) error {
 	var err error
 	errorMsg := ""
 
 	for _, eventID := range eventIDs {
-		err = gcalAPI.Service.Events.Delete(calendarId, eventID).Do()
+		err = gcalAPI.service.Events.Delete(calendarId, eventID).Do()
 		if err != nil {
 			errorMsg += fmt.Sprintf("unable to delete event = %v because %v;", eventID, err)
 		}
