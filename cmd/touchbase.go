@@ -98,9 +98,9 @@ func runtTouchbase(cmd *cobra.Command) error {
 	if len(groupContacts) > maxContactsToTochbaseWith {
 		groupContacts = groupContacts[:maxContactsToTochbaseWith]
 		cmd.Printf("%s Touchbase events are created for a Max of %v contacts."+
-			"\nEvents will be created for ONLY the top 7 contacts in '%s'."+
+			"\nEvents will be created for ONLY the top %v contacts in '%s'."+
 			"\nPlease update the group accordingly, if you'd like to create events for a different set of contacts.\n",
-			warningLabel, maxContactsToTochbaseWith, groupArg)
+			warningLabel, maxContactsToTochbaseWith, len(groupContacts), groupArg)
 	}
 
 	eventIds, err := googleAPI.CreateEvents(
@@ -123,13 +123,17 @@ func runtTouchbase(cmd *cobra.Command) error {
 
 func validateFlags() error {
 	// TODO: Move these validations into custom typee later: https://github.com/spf13/cobra/issues/376
+	if countArg <= 0 {
+		return fmt.Errorf("inavlid argument \"%v\", --count must be > 0", countArg)
+	}
+
 	if frequencyArg < 0 || frequencyArg >= len(intervals) {
-		return fmt.Errorf("inavlid arg \"%v\", --freq should be 0, 1, or 2", frequencyArg)
+		return fmt.Errorf("inavlid argument \"%v\", --freq should be 0, 1, or 2", frequencyArg)
 	}
 
 	match, _ := regexp.MatchString("\\d{1,2}:\\d\\d-\\d{1,2}:\\d\\d", timeSlotArg)
 	if !match {
-		return fmt.Errorf("inavlid arg \"%v\", valid --time-slot format required e.g. 18:00-18:30", timeSlotArg)
+		return fmt.Errorf("inavlid argument \"%v\", valid --time-slot format required e.g. 18:00-18:30", timeSlotArg)
 	}
 	return nil
 }

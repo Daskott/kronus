@@ -79,7 +79,10 @@ func (gcalAPI GCalendarAPI) CreateEvents(
 		eventId, err := gcalAPI.CreateEvent(user.Name, startStr, endStr, eventRecurrence)
 		if err != nil {
 			// Create all events or no event
-			gcalAPI.ClearAllEvents(eventIds)
+			delErr := gcalAPI.ClearAllEvents(eventIds)
+			if delErr != nil {
+				err = fmt.Errorf("%v; %v", err, delErr)
+			}
 			return nil, fmt.Errorf("unable to create event. %v", err)
 		}
 		eventIds = append(eventIds, eventId)
