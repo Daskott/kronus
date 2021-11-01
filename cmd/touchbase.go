@@ -48,8 +48,8 @@ func createTouchbaseCmd() *cobra.Command {
 		Short: "Deletes previous touchbase events and creates new ones based on configs",
 		Long: `Deletes previous touchbase google calender events created by kronus
 	and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
-		Run: func(cmd *cobra.Command, args []string) {
-			runtTouchbase(cmd)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runtTouchbase(cmd)
 		},
 	}
 
@@ -63,9 +63,11 @@ func createTouchbaseCmd() *cobra.Command {
 	return cmd
 }
 
-func runtTouchbase(cmd *cobra.Command) {
+func runtTouchbase(cmd *cobra.Command) error {
 	err := validateFlags()
-	cobra.CheckErr(err)
+	if err != nil {
+		return err
+	}
 
 	slotStartTime, slotEndTime := splitTimeSlot(timeSlotArg)
 
@@ -73,9 +75,8 @@ func runtTouchbase(cmd *cobra.Command) {
 
 	selectedGroupContactIds := config.GetStringSlice(fmt.Sprintf("groups.%s", groupArg))
 	if len(selectedGroupContactIds) == 0 {
-		cmd.Printf("\nNo contacts in '%s' group. Try creating '%s' and adding some contacts to it."+
-			"\nUpdate app config in %s\n", groupArg, groupArg, config.ConfigFileUsed())
-		return
+		return fmt.Errorf("no contacts in '%s' group. Try creating '%s' and adding some contacts to it."+
+			"\nUpdate app config in %s", groupArg, groupArg, config.ConfigFileUsed())
 	}
 
 	contacts := []types.Contact{}
@@ -84,9 +85,8 @@ func runtTouchbase(cmd *cobra.Command) {
 
 	groupContacts := filterContactsByIDs(contacts, selectedGroupContactIds)
 	if len(groupContacts) == 0 {
-		cmd.Printf("\nUnable to find any contact details for members of '%s'."+
-			"\nTry updating '%s' group in app config located in %s\n", groupArg, groupArg, config.ConfigFileUsed())
-		return
+		return fmt.Errorf("unable to find any contact details for members of '%s'"+
+			"\nTry updating '%s' group in app config located in %s", groupArg, groupArg, config.ConfigFileUsed())
 	}
 
 	// Clear any events previously created by touchbase
@@ -108,24 +108,28 @@ func runtTouchbase(cmd *cobra.Command) {
 		slotStartTime,
 		slotEndTime, eventRecurrence,
 	)
-	cobra.CheckErr(err)
+	if err != nil {
+		return err
+	}
 
 	// Save created eventIds to config file
 	config.Set("events", eventIds)
 	config.WriteConfig()
 
 	cmd.Printf("\nAll touchbase appointments with members of %s have been created!\n", groupArg)
+
+	return nil
 }
 
 func validateFlags() error {
 	// TODO: Move these validations into custom typee later: https://github.com/spf13/cobra/issues/376
 	if frequencyArg < 0 || frequencyArg >= len(intervals) {
-		return fmt.Errorf("--freq should be 0, 1, or 2.\nTry `kronus touchbase --help` for more information")
+		return fmt.Errorf("inavlid arg \"%v\", --freq should be 0, 1, or 2", frequencyArg)
 	}
 
 	match, _ := regexp.MatchString("\\d{1,2}:\\d\\d-\\d{1,2}:\\d\\d", timeSlotArg)
 	if !match {
-		return fmt.Errorf("proper --time-slot format required e.g. 18:00-18:30")
+		return fmt.Errorf("inavlid arg \"%v\", valid --time-slot format required e.g. 18:00-18:30", timeSlotArg)
 	}
 	return nil
 }

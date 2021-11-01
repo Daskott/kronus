@@ -70,8 +70,8 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	googleAPI = googleservice.NewGoogleCalendarAPI(credentials)
-	rootCmd.Version = fmt.Sprintf("v%s", version.Version)
 
+	rootCmd.Version = fmt.Sprintf("v%s", version.Version)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
