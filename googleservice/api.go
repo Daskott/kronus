@@ -2,19 +2,9 @@ package googleservice
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"time"
 
-	"log"
-	"net/http"
-	"os"
-
-	"github.com/Daskott/kronus/types"
-	"github.com/spf13/cobra"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
 )
@@ -22,7 +12,7 @@ import (
 type GCalendarAPIInterface interface {
 	// CreateEvents creates google calendar events for the given contacts and returns the eventIDs and error(if any)
 	CreateEvents(
-		groupContacts []types.Contact,
+		groupContacts []Contact,
 		slotStartTime,
 		slotEndTime,
 		eventRecurrence string) ([]string, error)
@@ -35,35 +25,26 @@ type GCalendarAPIInterface interface {
 }
 
 type GCalendarAPI struct {
-	service *calendar.Service
+	service    *calendar.Service
+	calendarId string // The calendar to update
 }
 
-const calendarId = "primary"
+type Contact struct {
+	Name string
+}
 
-func NewGoogleCalendarAPI(credentials types.GoogleAppCredentials) *GCalendarAPI {
+func NewGoogleCalendarAPI(credentialsPath, calendarEmail string) (*GCalendarAPI, error) {
 	ctx := context.Background()
-	b, err := json.Marshal(credentials)
+	calendarService, err := calendar.NewService(ctx, option.WithCredentialsFile(credentialsPath))
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		return nil, fmt.Errorf("unable to retrieve Google Calendar client: %v", err)
 	}
 
-	// If modifying these scopes, delete your previously saved *'token.json.
-	config, err := google.ConfigFromJSON(b, calendar.CalendarEventsScope)
-	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
-	}
-	client := getClient(config)
-
-	calendarService, err := calendar.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		log.Fatalf("Unable to retrieve Calendar client: %v", err)
-	}
-
-	return &GCalendarAPI{service: calendarService}
+	return &GCalendarAPI{service: calendarService, calendarId: calendarEmail}, nil
 }
 
 func (gcalAPI GCalendarAPI) CreateEvents(
-	groupContacts []types.Contact,
+	groupContacts []Contact,
 	slotStartTime,
 	slotEndTime,
 	eventRecurrence string) ([]string, error) {
@@ -120,7 +101,7 @@ func (gcalAPI GCalendarAPI) CreateEvent(contact, startTime, endTime, recurrence 
 		Attendees: []*calendar.EventAttendee{},
 	}
 
-	event, err := gcalAPI.service.Events.Insert(calendarId, event).Do()
+	event, err := gcalAPI.service.Events.Insert(gcalAPI.calendarId, event).Do()
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +114,7 @@ func (gcalAPI GCalendarAPI) ClearAllEvents(eventIDs []string) error {
 	errorMsg := ""
 
 	for _, eventID := range eventIDs {
-		err = gcalAPI.service.Events.Delete(calendarId, eventID).Do()
+		err = gcalAPI.service.Events.Delete(gcalAPI.calendarId, eventID).Do()
 		if err != nil {
 			errorMsg += fmt.Sprintf("unable to delete event = %v because %v;", eventID, err)
 		}
@@ -144,72 +125,4 @@ func (gcalAPI GCalendarAPI) ClearAllEvents(eventIDs []string) error {
 	}
 
 	return err
-}
-
-// Retrieve a token, saves the token, then returns the generated client.
-func getClient(config *oauth2.Config) *http.Client {
-	// The file kronus-token.json stores the user's access and refresh tokens, and is
-	// created automatically when the authorization flow completes for the first
-	// time.
-	home, err := os.UserHomeDir()
-	cobra.CheckErr(err)
-
-	// Read token from file
-	tokFileFilePath := filepath.Join(home, ".kronus-token.json")
-	token, err := tokenFromFile(tokFileFilePath)
-
-	// Get updated token by calling TokenSource(auto-renews token if expired) with token from file.
-	// Doing this because, we'd like to prompt the user to sign-in to their google account
-	// when their original token in file can no longer be renewed.
-	if err == nil {
-		token, err = config.TokenSource(context.TODO(), token).Token()
-	}
-
-	if err != nil || !token.Valid() {
-		token = getTokenFromWeb(config)
-		saveToken(tokFileFilePath, token)
-	}
-
-	return config.Client(context.Background(), token)
-}
-
-// Request a token from the web, then returns the retrieved token.
-func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the "+
-		"authorization code: \n%v\n", authURL)
-
-	var authCode string
-	if _, err := fmt.Scan(&authCode); err != nil {
-		log.Fatalf("Unable to read authorization code: %v", err)
-	}
-
-	tok, err := config.Exchange(context.TODO(), authCode)
-	if err != nil {
-		log.Fatalf("Unable to retrieve token from web: %v", err)
-	}
-	return tok
-}
-
-// Retrieves a token from a local file.
-func tokenFromFile(file string) (*oauth2.Token, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	tok := &oauth2.Token{}
-	err = json.NewDecoder(f).Decode(tok)
-	return tok, err
-}
-
-// Saves a token to a file path.
-func saveToken(path string, token *oauth2.Token) {
-	fmt.Printf("Saving credential file to: %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		log.Fatalf("Unable to cache oauth token: %v", err)
-	}
-	defer f.Close()
-	json.NewEncoder(f).Encode(token)
 }

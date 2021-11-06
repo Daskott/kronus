@@ -1,9 +1,5 @@
 package googleservice
 
-import (
-	"github.com/Daskott/kronus/types"
-)
-
 type GCalendarAPIStub struct {
 	CreatedEventsID     []string
 	CreatedEventID      string
@@ -13,7 +9,7 @@ type GCalendarAPIStub struct {
 }
 
 func (gcalAPI GCalendarAPIStub) CreateEvents(
-	groupContacts []types.Contact,
+	groupContacts []Contact,
 	slotStartTime,
 	slotEndTime,
 	eventRecurrence string) ([]string, error) {

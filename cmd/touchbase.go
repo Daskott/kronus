@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Daskott/kronus/types"
+	"github.com/Daskott/kronus/googleservice"
 	"github.com/spf13/cobra"
 )
 
@@ -79,7 +79,7 @@ func runtTouchbase(cmd *cobra.Command) error {
 			"\nUpdate app config in %s", groupArg, groupArg, config.ConfigFileUsed())
 	}
 
-	contacts := []types.Contact{}
+	contacts := []googleservice.Contact{}
 	err = config.UnmarshalKey("contacts", &contacts)
 	cobra.CheckErr(err)
 
@@ -148,8 +148,8 @@ func splitTimeSlot(timeSlotStr string) (string, string) {
 	return list[0], list[1]
 }
 
-func filterContactsByIDs(allContacts []types.Contact, contactIds []string) []types.Contact {
-	result := []types.Contact{}
+func filterContactsByIDs(allContacts []googleservice.Contact, contactIds []string) []googleservice.Contact {
+	result := []googleservice.Contact{}
 	for index, contact := range allContacts {
 		if inList(contactIds, fmt.Sprintf("%v", index)) {
 			result = append(result, contact)
