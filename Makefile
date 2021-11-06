@@ -15,7 +15,7 @@ prep-release:
 publish:
 	make check-env
 	git push origin v$(VERSION)
-	GOPROXY=proxy.golang.org go list -m github.com/Daskott/kronu@v$(VERSION)
+	GOPROXY=proxy.golang.org go list -m github.com/Daskott/kronus@v$(VERSION)
 
 release:
 	make prep-release
