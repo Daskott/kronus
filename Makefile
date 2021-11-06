@@ -13,7 +13,7 @@ prep-release:
 	git tag v$(VERSION)
 
 publish:
-    make check-env
+	make check-env
 	git push origin v$(VERSION)
 	GOPROXY=proxy.golang.org go list -m github.com/Daskott/kronu@v$(VERSION)
 
