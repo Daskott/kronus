@@ -43,14 +43,7 @@ var (
 )
 
 // rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use: "kronus",
-	Short: `kronus is a CLI library for Go that allows you to create
-coffee chat appointments with your contacts.
-
-The application is a tool to generate recurring google calender events for each of your contacts,
-to remind you to reach out and see how they are doing :)`,
-}
+var rootCmd *cobra.Command
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -61,9 +54,27 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig, initGCalendarAPI)
 
+	rootCmd = createRootCmd()
 	rootCmd.Version = fmt.Sprintf("v%s", version.Version)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+func createRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use: "kronus",
+		Short: `kronus is a CLI library for Go that allows you to create
+coffee chat appointments with your contacts.
+
+The application is a tool to generate recurring google calender events for each of your contacts,
+to remind you to reach out and see how they are doing :)`,
+	}
+
+	cmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")
+	cmd.PersistentFlags().BoolVarP(&isDevEnv, "dev", "", false, "run in development mode")
+	cmd.PersistentFlags().BoolVarP(&isTestEnv, "test", "", false, "run in test mode")
+
+	cmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	return cmd
 }
 
 func initGCalendarAPI() {

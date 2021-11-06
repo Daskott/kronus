@@ -47,7 +47,7 @@ func createTouchbaseCmd() *cobra.Command {
 		Use:   "touchbase",
 		Short: "Deletes previous touchbase events and creates new ones based on configs",
 		Long: `Deletes previous touchbase google calender events created by kronus
-	and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
+and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runtTouchbase(cmd)
 		},
@@ -57,8 +57,6 @@ func createTouchbaseCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&groupArg, "group", "g", "", "group to create touchbase events for")
 	cmd.Flags().IntVarP(&frequencyArg, "freq", "f", 1, "how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly")
 	cmd.Flags().StringVarP(&timeSlotArg, "time-slot", "t", "18:00-18:30", "time slot in the day allocated for touching base")
-	cmd.Flags().BoolVarP(&isDevEnv, "dev", "d", false, "run touchbase in development mode")
-	cmd.Flags().BoolVarP(&isTestEnv, "test", "", false, "run touchbase in test mode")
 
 	cmd.MarkFlagRequired("group")
 

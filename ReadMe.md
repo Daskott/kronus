@@ -17,10 +17,12 @@ You can create `touchbase` events for contacts in any group, up to a Max of **7*
     touchbase   Deletes previous touchbase events and creates new ones based on configs
 
   Flags:
-        --config string   config file (default is $HOME/.kronus.yaml)
-    -h, --help            help for kronus
-    -t, --toggle          Help message for toggle
-    -v, --version         version for kronus
+      --config string   config file (default is $HOME/.kronus.yaml)
+      --dev             run in development mode
+  -h, --help            help for kronus
+      --test            run in test mode
+  -t, --toggle          Help message for toggle
+  -v, --version         version for kronus
 
   Use "kronus [command] --help" for more information about a command.
   ```
@@ -40,7 +42,7 @@ You can create `touchbase` events for contacts in any group, up to a Max of **7*
   ```
   go get -u github.com/Daskott/kronus
   ```
-- Run `kronus touchbase --group=family` to create re-curring event on google calendar
+- Run `kronus touchbase --group=<group_name>` to create re-curring event on google calendar
 - For help run `kronus touchbase --help`
   ```
   Deletes previous touchbase google calender events created by kronus
@@ -50,16 +52,16 @@ You can create `touchbase` events for contacts in any group, up to a Max of **7*
     kronus touchbase [flags]
 
   Flags:
-    -c, --count int          how many times you want to touchbase with members of a group (default 4)
-    -d, --dev                run touchbase in development mode
-    -f, --freq int           how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly (default 1)
-    -g, --group string       group to create touchbase events for
-    -h, --help               help for touchbase
-        --test               run touchbase in test mode
-    -t, --time-slot string   time slot in the day allocated for touching base (default "18:00-18:30")
+  -c, --count int          how many times you want to touchbase with members of a group (default 4)
+  -f, --freq int           how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly (default 1)
+  -g, --group string       group to create touchbase events for
+  -h, --help               help for touchbase
+  -t, --time-slot string   time slot in the day allocated for touching base (default "18:00-18:30")
 
   Global Flags:
         --config string   config file (default is $HOME/.kronus.yaml)
+        --dev             run in development mode
+        --test            run in test mode
   ```
 
 ## Configuration
@@ -120,7 +122,7 @@ Update config to include your `timezone`, `contacts` & `groups`.
   ```
 - To run `touchbaseCmd`: 
   ```
-  go run main.go touchbase
+  go run main.go touchbase --dev
   ```
 - To run tests: 
   ```
