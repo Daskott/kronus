@@ -7,7 +7,6 @@ contacts:
 - name: Aubrey
 - name: Glen
 - name: Lewis
-env: production
 events: []
 groups:
   family:
@@ -22,6 +21,10 @@ groups:
   - 5
   - 6
   - 7
+owner:
+  email: test@gmail.com
+secrets:
+  google_application_credentials: Test
 settings:
   timezone: America/Toronto
   touchbase-recurrence: RRULE:FREQ=WEEKLY;

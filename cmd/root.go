@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 
 	"github.com/Daskott/kronus/googleservice"
-	"github.com/Daskott/kronus/types"
 	"github.com/Daskott/kronus/version"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -35,20 +34,12 @@ var (
 	config    *viper.Viper
 	googleAPI googleservice.GCalendarAPIInterface
 
-	yellow       = color.New(color.FgYellow).SprintFunc()
-	warningLabel = yellow("Warning:")
+	isDevEnv  bool
+	isTestEnv bool
 
-	credentials = types.GoogleAppCredentials{
-		Installed: types.InstalledType{
-			ClientId:                "984074116152-2mj5vshqb06c1gdlajlelfp9bdi6906e.apps.googleusercontent.com",
-			ProjectId:               "keep-up-326712",
-			AuthURI:                 "https://accounts.google.com/o/oauth2/auth",
-			TokenURI:                "https://oauth2.googleapis.com/token",
-			AuthProviderx509CertURL: "https://www.googleapis.com/oauth2/v1/certs",
-			ClientSecret:            "WHLhwFpDEv-60vpH2TSPlsVB",
-			RedirectUris:            []string{"urn:ietf:wg:oauth:2.0:oob", "http://localhost"},
-		},
-	}
+	yellow       = color.New(color.FgYellow).SprintFunc()
+	red          = color.New(color.FgRed).SprintFunc()
+	warningLabel = yellow("Warning:")
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -68,12 +59,35 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
-	googleAPI = googleservice.NewGoogleCalendarAPI(credentials)
+	cobra.OnInitialize(initConfig, initGCalendarAPI)
 
 	rootCmd.Version = fmt.Sprintf("v%s", version.Version)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+func initGCalendarAPI() {
+	googleCredentials := config.GetString("secrets.GOOGLE_APPLICATION_CREDENTIALS")
+	ownerEmail := config.GetString("owner.email")
+
+	if googleCredentials == "" {
+		cobra.CheckErr(formattedError(
+			"must set the env var 'GOOGLE_APPLICATION_CREDENTIALS' or add it to 'secrets' in %s", config.ConfigFileUsed()))
+
+	}
+
+	if ownerEmail == "" {
+		cobra.CheckErr(formattedError("must set 'owner.email' in %s", config.ConfigFileUsed()))
+	}
+
+	// No need to use real googleAPI in tests
+	if isTestEnv {
+		return
+	}
+
+	var err error
+	googleAPI, err = googleservice.NewGoogleCalendarAPI(googleCredentials, ownerEmail)
+	cobra.CheckErr(err)
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -84,22 +98,26 @@ func initConfig() {
 		// Use config file from the flag.
 		config.SetConfigFile(cfgFile)
 	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
+		configName, configDir, err := defaulatCFgNameAndDir()
 		cobra.CheckErr(err)
 
-		// If no default config file is found, create one using defaultConfigFileContent
-		configFilePath := filepath.Join(home, ".kronus.yaml")
+		// If config file is not found, create one using defaultConfigFileContent
+		configFilePath := filepath.Join(configDir, configName)
 		if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
 			err = ioutil.WriteFile(configFilePath, []byte(defaultConfigValue()), 0600)
 			cobra.CheckErr(err)
 		}
 
 		// Search config in home directory with name ".kronus" (without extension).
-		config.AddConfigPath(home)
+		config.AddConfigPath(configDir)
 		config.SetConfigType("yaml")
-		config.SetConfigName(".kronus")
+		config.SetConfigName(configName)
 	}
+
+	// BIND secrets.GOOGLE... to GOOGLE_APPLICATION_CREDENTIALS env, so the value doesn't need to be
+	// stored in the .kronus.yaml config, but can be read from the system ENV var.
+	// FYI: The env var overrides whatever is in the config file
+	config.BindEnv("secrets.GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_APPLICATION_CREDENTIALS")
 
 	config.AutomaticEnv() // read in environment variables that match
 
@@ -109,10 +127,34 @@ func initConfig() {
 	}
 }
 
+func defaulatCFgNameAndDir() (configName string, configDir string, err error) {
+	configName = ".kronus.yaml"
+
+	// Use home directory for production
+	configDir, err = os.UserHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+
+	if isDevEnv || isTestEnv {
+		configName = ".kronus.dev.yaml"
+		configDir, err = os.Getwd()
+		if err != nil {
+			return "", "", err
+		}
+
+		if isTestEnv {
+			configName = ".kronus.yaml"
+			configDir = filepath.Join(configDir, "test-fixtures")
+		}
+	}
+
+	return configName, configDir, err
+}
+
 // defaultConfigValue returns the default content for .kronus.yaml
 func defaultConfigValue() string {
-	return `env: production
-settings:
+	return `settings:
  timezone: "America/Toronto"
  touchbase-recurrence: "RRULE:FREQ=WEEKLY;"
 
@@ -121,7 +163,7 @@ settings:
 # contacts:
 # - name: Smally
 # - name: Dad
-# 
+#
 contacts:
 
 # Here you add the different groups you'd like to have for your
@@ -134,12 +176,21 @@ contacts:
 #     - 1
 #   family:
 #     - 2
-# 
+#
 groups:
 
 
 # This section is automatically updated by the CLI App to manage
 # events created by kronus
 events:
+
+owner:
+ email: <The email associated with your google calendar>
+secrets:
+  GOOGLE_APPLICATION_CREDENTIALS: <Path to the JSON file that contains your service account key>
 `
+}
+
+func formattedError(format string, a ...interface{}) error {
+	return fmt.Errorf(red(format), a...)
 }

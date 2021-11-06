@@ -3,8 +3,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,17 +22,6 @@ func TestTouchbaseCmd(t *testing.T) {
 		buff      = new(bytes.Buffer)
 		actualOut string
 	)
-
-	// Save cfgFile before stubbing it out
-	// And revert to prev cfgFile after test is done
-	savedCfgFile := cfgFile
-	defer func() {
-		cfgFile = savedCfgFile
-	}()
-
-	// Set cfgFile to point to test config.yml
-	path, _ := os.Getwd()
-	cfgFile = filepath.Join(path, "test-fixtures", "config.yml")
 
 	// Save googleAPI before stubbing it out
 	// And revert to prev googleAPI after test is done
@@ -118,7 +105,7 @@ func TestTouchbaseCmd(t *testing.T) {
 
 			tbCmd.SetOut(buff)
 			tbCmd.SetErr(buff)
-			tbCmd.SetArgs(c.args)
+			tbCmd.SetArgs(append(c.args, "--test"))
 
 			tbCmd.Execute()
 
