@@ -129,4 +129,12 @@ Update config to include your `timezone`, `contacts` & `groups`.
 
 ## Publishing package
 * Update `Version` in `version.go`
-* Follow steps https://golang.org/doc/modules/publishing
+* Commit changes:
+  ```
+  git commit -m "kronus: changes for v0.1.0"
+  ```
+* Run:
+  ```
+  make release VERSION=0.1.0
+  ```
+For more info see detailed steps https://golang.org/doc/modules/publishing
