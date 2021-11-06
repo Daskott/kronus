@@ -34,6 +34,9 @@ var (
 	config    *viper.Viper
 	googleAPI googleservice.GCalendarAPIInterface
 
+	isDevEnv  bool
+	isTestEnv bool
+
 	yellow       = color.New(color.FgYellow).SprintFunc()
 	red          = color.New(color.FgRed).SprintFunc()
 	warningLabel = yellow("Warning:")
@@ -78,7 +81,7 @@ func initGCalendarAPI() {
 	}
 
 	// No need to use real googleAPI in tests
-	if config.GetString("env") == "test" {
+	if isTestEnv {
 		return
 	}
 
@@ -95,21 +98,20 @@ func initConfig() {
 		// Use config file from the flag.
 		config.SetConfigFile(cfgFile)
 	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
+		configName, configDir, err := defaulatCFgNameAndDir()
 		cobra.CheckErr(err)
 
-		// If no default config file is found, create one using defaultConfigFileContent
-		configFilePath := filepath.Join(home, ".kronus.yaml")
+		// If config file is not found, create one using defaultConfigFileContent
+		configFilePath := filepath.Join(configDir, configName)
 		if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
 			err = ioutil.WriteFile(configFilePath, []byte(defaultConfigValue()), 0600)
 			cobra.CheckErr(err)
 		}
 
 		// Search config in home directory with name ".kronus" (without extension).
-		config.AddConfigPath(home)
+		config.AddConfigPath(configDir)
 		config.SetConfigType("yaml")
-		config.SetConfigName(".kronus")
+		config.SetConfigName(configName)
 	}
 
 	// BIND secrets.GOOGLE... to GOOGLE_APPLICATION_CREDENTIALS env, so the value doesn't need to be
@@ -125,10 +127,34 @@ func initConfig() {
 	}
 }
 
+func defaulatCFgNameAndDir() (configName string, configDir string, err error) {
+	configName = ".kronus.yaml"
+
+	// Use home directory for production
+	configDir, err = os.UserHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+
+	if isDevEnv || isTestEnv {
+		configName = ".kronus.dev.yaml"
+		configDir, err = os.Getwd()
+		if err != nil {
+			return "", "", err
+		}
+
+		if isTestEnv {
+			configName = ".kronus.yaml"
+			configDir = filepath.Join(configDir, "test-fixtures")
+		}
+	}
+
+	return configName, configDir, err
+}
+
 // defaultConfigValue returns the default content for .kronus.yaml
 func defaultConfigValue() string {
-	return `env: production
-settings:
+	return `settings:
  timezone: "America/Toronto"
  touchbase-recurrence: "RRULE:FREQ=WEEKLY;"
 
@@ -137,7 +163,7 @@ settings:
 # contacts:
 # - name: Smally
 # - name: Dad
-# 
+#
 contacts:
 
 # Here you add the different groups you'd like to have for your
@@ -150,7 +176,7 @@ contacts:
 #     - 1
 #   family:
 #     - 2
-# 
+#
 groups:
 
 

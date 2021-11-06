@@ -7,7 +7,6 @@ contacts:
 - name: Aubrey
 - name: Glen
 - name: Lewis
-env: test
 events: []
 groups:
   family:
