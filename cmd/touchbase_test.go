@@ -18,9 +18,9 @@ type TestDataProvider []struct {
 
 func TestTouchbaseCmd(t *testing.T) {
 	var (
-		tbCmd     *cobra.Command
-		buff      = new(bytes.Buffer)
-		actualOut string
+		rootCmdTmp *cobra.Command
+		buff       = new(bytes.Buffer)
+		actualOut  string
 	)
 
 	// Save googleAPI before stubbing it out
@@ -98,16 +98,17 @@ func TestTouchbaseCmd(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.description, func(t *testing.T) {
-			tbCmd = createTouchbaseCmd()
+			rootCmdTmp = createRootCmd()
+			rootCmdTmp.AddCommand(createTouchbaseCmd())
 
 			// Clear output buffer before the next test
 			buff.Reset()
 
-			tbCmd.SetOut(buff)
-			tbCmd.SetErr(buff)
-			tbCmd.SetArgs(append(c.args, "--test"))
+			rootCmdTmp.SetOut(buff)
+			rootCmdTmp.SetErr(buff)
+			rootCmdTmp.SetArgs(append([]string{"touchbase"}, append(c.args, "--test")...))
 
-			tbCmd.Execute()
+			rootCmdTmp.Execute()
 
 			actualOut = buff.String()
 			if !strings.Contains(actualOut, c.expectedOut) {
