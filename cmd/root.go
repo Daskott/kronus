@@ -66,6 +66,7 @@ coffee chat appointments with your contacts.
 
 The application is a tool to generate recurring google calender events for each of your contacts,
 to remind you to reach out and see how they are doing :)`,
+		ValidArgs: []string{"touchbase"},
 	}
 
 	cmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")
