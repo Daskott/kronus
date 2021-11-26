@@ -4,8 +4,11 @@ go 1.17
 
 require (
 	github.com/fatih/color v1.13.0
+	github.com/go-playground/validator v9.31.0+incompatible
+	github.com/gorilla/mux v1.8.0
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.9.0
+	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 	google.golang.org/api v0.57.0
 	gorm.io/driver/mysql v1.2.0
 	gorm.io/gorm v1.22.3
@@ -14,6 +17,8 @@ require (
 require (
 	cloud.google.com/go v0.94.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
+	github.com/go-playground/locales v0.14.0 // indirect
+	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -22,11 +27,14 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.3 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
+	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mattn/go-colorable v0.1.9 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
+	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -41,6 +49,8 @@ require (
 	google.golang.org/genproto v0.0.0-20210920155426-26f343e4c215 // indirect
 	google.golang.org/grpc v1.40.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/ini.v1 v1.63.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
