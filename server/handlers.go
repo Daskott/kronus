@@ -3,8 +3,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/Daskott/kronus/database"
@@ -24,9 +25,20 @@ var validate *validator.Validate
 
 func init() {
 	validate = validator.New()
-	_ = validate.RegisterValidation("phone_number", func(fl validator.FieldLevel) bool {
-		return isValidatePhoneNumber(fl.Field().String())
+	err := validate.RegisterValidation("phone_number", func(fl validator.FieldLevel) bool {
+		re := regexp.MustCompile(`^\+(?:[0-9] ?){6,14}[0-9]$`)
+		return re.MatchString(fl.Field().String())
 	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = validate.RegisterValidation("not_empty", func(fl validator.FieldLevel) bool {
+		return len(strings.TrimSpace(fl.Field().String())) > 0
+	})
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
 func createUser(rw http.ResponseWriter, r *http.Request) {
@@ -105,12 +117,16 @@ func updateUser(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if data["password"] != nil && strings.TrimSpace(fmt.Sprintf("%v", data["password"])) == "" {
-		errs = append(errs, "password cannot be empty")
+	if data["password"] != nil {
+		if err := validate.Var(data["password"], "not_empty"); err != nil {
+			errs = append(errs, "password cannot be empty")
+		}
 	}
 
-	if data["phone_number"] != nil && isValidatePhoneNumber(fmt.Sprintf("%v", data["phone_number"])) {
-		errs = append(errs, "password cannot be empty")
+	if data["phone_number"] != nil {
+		if err := validate.Var(data["phone_number"], "phone_number"); err != nil {
+			errs = append(errs, "valid phone_number is required")
+		}
 	}
 
 	if len(errs) > 0 {
@@ -144,6 +160,10 @@ func logIn(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: return JWT includes IP address
+	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
+}
+
+func healthCheck(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
 }
 
