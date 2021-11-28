@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/Daskott/kronus/database"
@@ -25,15 +24,7 @@ var validate *validator.Validate
 
 func init() {
 	validate = validator.New()
-	err := validate.RegisterValidation("phone_number", func(fl validator.FieldLevel) bool {
-		re := regexp.MustCompile(`^\+(?:[0-9] ?){6,14}[0-9]$`)
-		return re.MatchString(fl.Field().String())
-	})
-	if err != nil {
-		log.Panic(err)
-	}
-
-	err = validate.RegisterValidation("not_empty", func(fl validator.FieldLevel) bool {
+	err := validate.RegisterValidation("not_empty", func(fl validator.FieldLevel) bool {
 		return len(strings.TrimSpace(fl.Field().String())) > 0
 	})
 	if err != nil {
@@ -124,7 +115,7 @@ func updateUser(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if data["phone_number"] != nil {
-		if err := validate.Var(data["phone_number"], "phone_number"); err != nil {
+		if err := validate.Var(data["phone_number"], "e164"); err != nil {
 			errs = append(errs, "valid phone_number is required")
 		}
 	}
