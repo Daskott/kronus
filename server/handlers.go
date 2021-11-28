@@ -24,8 +24,13 @@ var validate *validator.Validate
 
 func init() {
 	validate = validator.New()
-	err := validate.RegisterValidation("not_empty", func(fl validator.FieldLevel) bool {
-		return len(strings.TrimSpace(fl.Field().String())) > 0
+	err := validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
+		// if whitesapece in password return false
+		err := validate.Var(fl.Field().String(), "contains= ")
+		if err == nil {
+			return false
+		}
+		return len(fl.Field().String()) > 0
 	})
 	if err != nil {
 		log.Panic(err)
@@ -109,8 +114,8 @@ func updateUser(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if data["password"] != nil {
-		if err := validate.Var(data["password"], "not_empty"); err != nil {
-			errs = append(errs, "password cannot be empty")
+		if err := validate.Var(data["password"], "password"); err != nil {
+			errs = append(errs, "valid password is required")
 		}
 	}
 

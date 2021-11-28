@@ -40,7 +40,7 @@ type User struct {
 	LastName      string        `json:"last_name"`
 	PhoneNumber   string        `json:"e164" validate:"required,phone_number" gorm:"not null;unique"`
 	Email         string        `json:"email" validate:"required,email" gorm:"not null;unique"`
-	Password      string        `json:"password,omitempty" validate:"required,not_empty" gorm:"not null"`
+	Password      string        `json:"password,omitempty" validate:"required,password" gorm:"not null"`
 	ProbeSettings *ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Contacts      []Contact     `json:"contacts,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Probes        []Probe       `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
