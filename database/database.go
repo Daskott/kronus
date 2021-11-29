@@ -61,7 +61,7 @@ type Contact struct {
 type Role struct {
 	BaseModel
 	Name  string `json:"name"`
-	Users []User `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Users []User `json:"users,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
 
 type ProbeSetting struct {
