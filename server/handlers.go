@@ -6,11 +6,12 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/go-playground/validator"
-	"github.com/gorilla/mux"
+	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 )
 
@@ -18,6 +19,10 @@ type ResponsePayload struct {
 	Errors  []string    `json:"errors"`
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
+}
+
+type TokenPayload struct {
+	Token string `json:"token"`
 }
 
 var validate *validator.Validate
@@ -37,23 +42,36 @@ func init() {
 	}
 }
 
-func createUser(rw http.ResponseWriter, r *http.Request) {
-	data := database.User{}
+func createUserHandler(rw http.ResponseWriter, r *http.Request) {
+	user := database.User{}
 	decoder := json.NewDecoder(r.Body)
+	assignedRole := "basic"
 
-	err := decoder.Decode(&data)
+	err := decoder.Decode(&user)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	errs := validate.Struct(data)
+	errs := validate.Struct(user)
 	if errs != nil {
 		writeResponse(rw, ResponsePayload{Errors: strings.Split(errs.Error(), "\n")}, http.StatusBadRequest)
 		return
 	}
 
-	err = database.CreateUser(&data)
+	// if no auth token and there's no user, make the 1st user an admin
+	if r.Context().Value(RequestContextKey("jwt_claims")) == nil && !database.AtLeastOneUserExists() {
+		assignedRole = "admin"
+	}
+
+	role, err := database.FindRole(assignedRole)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+	user.RoleID = role.ID
+
+	err = database.CreateUser(&user)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -62,11 +80,10 @@ func createUser(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
 }
 
-func findUser(rw http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 	user := database.User{}
 
-	err := database.FindUserBy(&user, "ID", vars["id"])
+	err := database.FindUserBy(&user, "ID", r.Context().Value(RequestContextKey("requestUserID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusNotFound)
 		return
@@ -80,10 +97,8 @@ func findUser(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Data: user})
 }
 
-func deleteUser(rw http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	err := database.DeleteUser(vars["id"])
+func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
+	err := database.DeleteUser(r.Context().Value(RequestContextKey("requestUserID")))
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -92,8 +107,7 @@ func deleteUser(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
 }
 
-func updateUser(rw http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 	data := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -130,7 +144,7 @@ func updateUser(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = database.UpdateUser(vars["id"], data)
+	err = database.UpdateUser(r.Context().Value(RequestContextKey("requestUserID")), data)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -139,7 +153,7 @@ func updateUser(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
 }
 
-func logIn(rw http.ResponseWriter, r *http.Request) {
+func logInHandler(rw http.ResponseWriter, r *http.Request) {
 	data := make(map[string]string)
 	decoder := json.NewDecoder(r.Body)
 	decoder.Decode(&data)
@@ -155,11 +169,39 @@ func logIn(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: return JWT includes IP address
-	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
+	// On success, find user record
+	user := database.User{}
+	err = database.FindUserBy(&user, "email", data["email"])
+	if err != nil {
+		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
+		return
+	}
+
+	isAdmin, err := database.IsAdmin(user)
+	if err != nil {
+		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
+		return
+	}
+
+	token, err := auth.EncodeJWT(jwt.MapClaims{
+		"sub":        user.ID,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+		"is_admin":   isAdmin,
+		"iss":        "kronus",
+		"iat":        time.Now().UTC().Unix(),
+		"exp":        time.Now().UTC().Add(24 * time.Hour).Unix(),
+	})
+
+	if err != nil {
+		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(rw).Encode(ResponsePayload{Success: true, Data: TokenPayload{Token: token}})
 }
 
-func healthCheck(rw http.ResponseWriter, r *http.Request) {
+func healthCheckHandler(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
 }
 
