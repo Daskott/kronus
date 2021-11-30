@@ -2,21 +2,29 @@ package auth
 
 import (
 	"fmt"
+	"log"
 
+	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Token struct {
-	Sub         int    `json:"sub"`
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	PhoneNumber string `json:"phone_number"`
-	IsAdmin     bool   `json:"is_admin"`
+type KronusTokenClaims struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	IsAdmin   bool   `json:"is_admin"`
+	jwt.StandardClaims
 }
 
-// TODO: Change this to JWK later
-var hmacSampleSecret = []byte("secret")
+var KeyPair *key.KeyPair
+
+func init() {
+	var err error
+	KeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem("private_key_dev.pem")
+	if err != nil {
+		log.Fatalf("unable to initialize keyPair: %v", err)
+	}
+}
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
@@ -28,10 +36,10 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func EncodeJWT(claims jwt.MapClaims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+func EncodeJWT(claims KronusTokenClaims) (string, error) {
+	token := jwt.NewWithClaims(jwt.GetSigningMethod("RS256"), claims)
 
-	tokenString, err := token.SignedString(hmacSampleSecret)
+	tokenString, err := token.SignedString(KeyPair.PrivateKey)
 	if err != nil {
 		return "", err
 	}
@@ -39,23 +47,24 @@ func EncodeJWT(claims jwt.MapClaims) (string, error) {
 	return tokenString, nil
 }
 
-func DecodeJWT(tokenString string) (jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+func DecodeJWT(tokenString string) (*KronusTokenClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &KronusTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// validate the alg is what you expect:
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return hmacSampleSecret, nil
+		return KeyPair.PublicKey, nil
 	})
-	if err != nil {
-		return nil, err
+
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("invalid jwt: %v", err)
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid jwt")
+	tokenClaims, ok := token.Claims.(*KronusTokenClaims)
+	if !ok {
+		return nil, fmt.Errorf("unable to assert token.Claims to KronusTokenClaims")
 	}
 
-	return claims, nil
+	return tokenClaims, nil
 }

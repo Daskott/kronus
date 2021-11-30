@@ -15,5 +15,7 @@ todo.md
 
 .kronus.dev.yaml
 
+private_key_dev.pem
+
 # Dependency directories (remove the comment below to include it)
 # vendor/

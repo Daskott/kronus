@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
+	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/go-playground/validator"
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
@@ -183,14 +185,16 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.EncodeJWT(jwt.MapClaims{
-		"sub":        user.ID,
-		"first_name": user.FirstName,
-		"last_name":  user.LastName,
-		"is_admin":   isAdmin,
-		"iss":        "kronus",
-		"iat":        time.Now().UTC().Unix(),
-		"exp":        time.Now().UTC().Add(24 * time.Hour).Unix(),
+	token, err := auth.EncodeJWT(auth.KronusTokenClaims{
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		IsAdmin:   isAdmin,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().UTC().Add(24 * time.Hour).Unix(),
+			IssuedAt:  time.Now().UTC().Unix(),
+			Issuer:    "kronus",
+			Subject:   fmt.Sprint(user.ID),
+		},
 	})
 
 	if err != nil {
@@ -201,9 +205,23 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true, Data: TokenPayload{Token: token}})
 }
 
+func jwksHandler(rw http.ResponseWriter, r *http.Request) {
+	jwk, err := auth.KeyPair.JWK()
+	if err != nil {
+		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(rw).Encode(key.ExportJWKAsJWKS(jwk))
+}
+
 func healthCheckHandler(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
 }
+
+// ---------------------------------------------------------------------------------//
+// Helper functions
+// --------------------------------------------------------------------------------//
 
 func writeResponse(rw http.ResponseWriter, payLoad ResponsePayload, statusCode int) {
 	rw.WriteHeader(statusCode)
