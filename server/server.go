@@ -20,8 +20,8 @@ type DecodedJWT struct {
 func Start() {
 	port := 3000
 	router := mux.NewRouter()
-	protectedRouter := router.PathPrefix("").Subrouter()
-	adminRouter := router.PathPrefix("").Subrouter()
+	protectedRouter := router.NewRoute().Subrouter()
+	adminRouter := router.NewRoute().Subrouter()
 
 	protectedRouter.HandleFunc("/users/{id:[0-9]+}", findUserHandler).Methods("GET")
 	protectedRouter.HandleFunc("/users/{id:[0-9]+}", updateUserHandler).Methods("PUT")

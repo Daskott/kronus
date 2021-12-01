@@ -75,6 +75,11 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 
 	err = database.CreateUser(&user)
 	if err != nil {
+		if strings.Contains(err.Error(), "Duplicate") {
+			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+			return
+		}
+
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}

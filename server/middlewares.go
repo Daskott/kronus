@@ -40,7 +40,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		defer func() {
 			responseStatus := greenColor(responseWriter.Status)
-			if responseWriter.Status > 400 {
+			if responseWriter.Status >= 500 {
 				responseStatus = redColor(responseWriter.Status)
 			}
 
