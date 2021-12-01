@@ -6,16 +6,52 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
+	"github.com/fatih/color"
 	"github.com/gorilla/mux"
 )
 
+var (
+	redColor    = color.New(color.FgRed).SprintFunc()
+	yellowColor = color.New(color.FgYellow).SprintFunc()
+	greenColor  = color.New(color.FgGreen).SprintFunc()
+)
+
+type ResponseWriterWithStatus struct {
+	http.ResponseWriter
+	Status int
+}
+
+func (r *ResponseWriterWithStatus) WriteHeader(status int) {
+	r.Status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.Method, r.RequestURI)
-		next.ServeHTTP(w, r)
+		start := time.Now()
+		responseWriter := &ResponseWriterWithStatus{
+			ResponseWriter: w,
+			Status:         200,
+		}
+
+		defer func() {
+			responseStatus := greenColor(responseWriter.Status)
+			if responseWriter.Status > 400 {
+				responseStatus = redColor(responseWriter.Status)
+			}
+
+			log.Println(
+				r.Method,
+				r.RequestURI,
+				responseStatus,
+				yellowColor(fmt.Sprintf("[%v]", time.Since(start))))
+		}()
+
+		next.ServeHTTP(responseWriter, r)
 	})
 }
 
@@ -24,7 +60,7 @@ func initialContextMiddleware(next http.Handler) http.Handler {
 		vars := mux.Vars(r)
 		w.Header().Add("Content-Type", "application/json")
 
-		// 	Add decoded token to request context
+		// 	Add decoded token & requestUserID to request context
 		ctx := context.WithValue(r.Context(), RequestContextKey("decodedJWT"), decodeAndVerifyAuthHeader(r.Header.Get("Authorization")))
 		ctx = context.WithValue(ctx, RequestContextKey("requestUserID"), vars["id"])
 

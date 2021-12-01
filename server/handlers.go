@@ -32,7 +32,7 @@ var validate *validator.Validate
 func init() {
 	validate = validator.New()
 	err := validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
-		// if whitesapece in password return false
+		// if whitespace in password return false
 		err := validate.Var(fl.Field().String(), "contains= ")
 		if err == nil {
 			return false
@@ -79,7 +79,7 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -96,7 +96,7 @@ func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(rw).Encode(ResponsePayload{Data: user})
+	writeResponse(rw, ResponsePayload{Success: true, Data: user}, http.StatusOK)
 }
 
 func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -106,7 +106,7 @@ func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
 func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -152,7 +152,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
 func logInHandler(rw http.ResponseWriter, r *http.Request) {
@@ -202,7 +202,7 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(rw).Encode(ResponsePayload{Success: true, Data: TokenPayload{Token: token}})
+	writeResponse(rw, ResponsePayload{Success: true, Data: TokenPayload{Token: token}}, http.StatusOK)
 }
 
 func jwksHandler(rw http.ResponseWriter, r *http.Request) {
@@ -212,18 +212,18 @@ func jwksHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(rw).Encode(key.ExportJWKAsJWKS(jwk))
+	writeResponse(rw, key.ExportJWKAsJWKS(jwk), http.StatusOK)
 }
 
 func healthCheckHandler(rw http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(rw).Encode(ResponsePayload{Success: true})
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
 // ---------------------------------------------------------------------------------//
 // Helper functions
 // --------------------------------------------------------------------------------//
 
-func writeResponse(rw http.ResponseWriter, payLoad ResponsePayload, statusCode int) {
+func writeResponse(rw http.ResponseWriter, payLoad interface{}, statusCode int) {
 	rw.WriteHeader(statusCode)
 	json.NewEncoder(rw).Encode(payLoad)
 }
