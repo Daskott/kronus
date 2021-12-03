@@ -18,6 +18,7 @@ var (
 	redColor    = color.New(color.FgRed).SprintFunc()
 	yellowColor = color.New(color.FgYellow).SprintFunc()
 	greenColor  = color.New(color.FgGreen).SprintFunc()
+	blueColor   = color.New(color.FgBlue).SprintFunc()
 )
 
 type ResponseWriterWithStatus struct {
@@ -45,7 +46,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			}
 
 			log.Println(
-				r.Method,
+				blueColor(r.Method),
 				r.RequestURI,
 				responseStatus,
 				yellowColor(fmt.Sprintf("[%v]", time.Since(start))))
