@@ -7,6 +7,8 @@ import (
 
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
+	"github.com/Daskott/kronus/server/cron"
+	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/gorilla/mux"
 )
 
@@ -38,7 +40,11 @@ func Start() {
 
 	database.AutoMigrate()
 
-	fmt.Printf("Kronus server is listening on port:%v...\n", port)
+	probeScheduler := pbscheduler.NewProbeScheduler(cron.CronScheduler)
+	probeScheduler.EnqueAllActiveProbes()
+	probeScheduler.CronScheduler.StartAsync()
+
+	log.Printf("Kronus server is listening on port:%v...\n", port)
 	err := http.ListenAndServe(fmt.Sprintf(":%v", port), router)
 	if err != nil {
 		log.Fatal(err)

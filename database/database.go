@@ -68,22 +68,25 @@ type ProbeSetting struct {
 	BaseModel
 	UserID uint `gorm:"not null;unique"`
 	Active bool `gorm:"default:false"`
+	// TODO:
+	// - When > Mon-9:00
+	// - Frequency > Weekly
 }
 
 type Probe struct {
 	BaseModel
-	Response         string
-	RetryCount       int
-	LocationLatLong  string
-	UserID           uint `gorm:"not null"`
-	ProbeStatusID    uint
-	EmergencyProbeID uint
+	Response        string
+	RetryCount      int
+	EmergencyProbe  EmergencyProbe
+	LocationLatLong string
+	UserID          uint `gorm:"not null"`
+	ProbeStatusID   uint
 }
 
 type EmergencyProbe struct {
 	BaseModel
 	ContactID    uint
-	Probe        Probe
+	ProbeID      uint
 	Acknowledged bool `gorm:"default:false"`
 }
 
@@ -137,15 +140,21 @@ func DeleteUser(id interface{}) error {
 	return db.Delete(&User{}, id).Error
 }
 
-func FindUserBy(user *User, field string, value interface{}) error {
-	return db.Select(
+func FindUserBy(field string, value interface{}) (*User, error) {
+	user := User{}
+	err := db.Select(
 		"ID",
 		"FirstName",
 		"LastName",
 		"PhoneNumber",
 		"Email",
 		"RoleID",
-	).First(user, fmt.Sprintf("%v = ?", field), value).Error
+	).First(&user, fmt.Sprintf("%v = ?", field), value).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
 
 func FindUserPassword(email string) (string, error) {
@@ -175,7 +184,17 @@ func FindRole(name string) (*Role, error) {
 	return &role, nil
 }
 
-func IsAdmin(user User) (bool, error) {
+func EmergencyContact(userID uint) (*Contact, error) {
+	contact := Contact{}
+	err := db.First(&contact, Contact{UserID: userID, IsEmergencyContact: true}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &contact, nil
+}
+
+func IsAdmin(user *User) (bool, error) {
 	if user.RoleID == 0 {
 		return false, nil
 	}
@@ -186,6 +205,84 @@ func IsAdmin(user User) (bool, error) {
 	}
 
 	return adminRole.ID == user.RoleID, nil
+}
+
+func UsersWithActiveProbe() ([]User, error) {
+	users := []User{}
+	probeSettings := []ProbeSetting{}
+	userIDs := []int64{}
+
+	// Fetch active probesettings
+	err := db.Find(&probeSettings).Where(&ProbeSetting{Active: true}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all userIDs for probeSettings
+	for _, pbSettings := range probeSettings {
+		userIDs = append(userIDs, int64(pbSettings.UserID))
+	}
+
+	// Get users with active probe
+	err = db.Where(userIDs).Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func SetProbeStatus(status string, probe *Probe) error {
+	probeStatus := ProbeStatus{}
+
+	err := db.Find(&probeStatus).Where(&ProbeStatus{Name: status}).Error
+	if err != nil {
+		return err
+	}
+
+	probe.ProbeStatusID = probeStatus.ID
+	err = db.Save(probe).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ProbesByStatus(status string) ([]Probe, error) {
+	probes := []Probe{}
+	probeStatus := ProbeStatus{}
+
+	err := db.Find(&probeStatus).Where(&ProbeStatus{Name: status}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.Find(&probes, "probe_status_id = ?", probeStatus.ID).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return probes, err
+}
+
+func CreateProbe(userID uint) error {
+	pendingProbeStatus := ProbeStatus{}
+
+	err := db.Find(&pendingProbeStatus).Where(&ProbeStatus{Name: "pending"}).Error
+	if err != nil {
+		return err
+	}
+
+	return db.Create(&Probe{UserID: userID, ProbeStatusID: pendingProbeStatus.ID}).Error
+}
+
+func CreateEmergencyProbe(probeID, contactID uint) error {
+	return db.Create(&EmergencyProbe{ProbeID: probeID, ContactID: contactID}).Error
+}
+
+func Save(value interface{}) error {
+	return db.Save(value).Error
 }
 
 func AutoMigrate() {
@@ -218,5 +315,11 @@ func AutoMigrate() {
 	if err := db.First(&Role{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		fmt.Println("Inserting seed data into 'Role'")
 		db.Create(&[]Role{{Name: "admin"}, {Name: "basic"}})
+	}
+
+	//Insert seed data for Probsettings
+	if err := db.First(&ProbeSetting{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		fmt.Println("Inserting seed data into 'ProbeSetting'")
+		db.Create(&[]ProbeSetting{{Active: true, UserID: 4}})
 	}
 }

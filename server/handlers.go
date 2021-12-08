@@ -88,9 +88,7 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
-	user := database.User{}
-
-	err := database.FindUserBy(&user, "ID", r.Context().Value(RequestContextKey("requestUserID")))
+	user, err := database.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusNotFound)
 		return
@@ -177,8 +175,7 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// On success, find user record
-	user := database.User{}
-	err = database.FindUserBy(&user, "email", data["email"])
+	user, err := database.FindUserBy("email", data["email"])
 	if err != nil {
 		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
 		return

@@ -8,17 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
-	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-)
-
-var (
-	redColor    = color.New(color.FgRed).SprintFunc()
-	yellowColor = color.New(color.FgYellow).SprintFunc()
-	greenColor  = color.New(color.FgGreen).SprintFunc()
-	blueColor   = color.New(color.FgBlue).SprintFunc()
 )
 
 type ResponseWriterWithStatus struct {
@@ -40,16 +33,16 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		}
 
 		defer func() {
-			responseStatus := greenColor(responseWriter.Status)
+			responseStatus := colors.Green(responseWriter.Status)
 			if responseWriter.Status >= 500 {
-				responseStatus = redColor(responseWriter.Status)
+				responseStatus = colors.Red(responseWriter.Status)
 			}
 
 			log.Println(
-				blueColor(r.Method),
+				colors.Blue(r.Method),
 				r.RequestURI,
 				responseStatus,
-				yellowColor(fmt.Sprintf("[%v]", time.Since(start))))
+				colors.Yellow(fmt.Sprintf("[%v]", time.Since(start))))
 		}()
 
 		next.ServeHTTP(responseWriter, r)
@@ -130,7 +123,7 @@ func decodeAndVerifyAuthHeader(authHeaderValue string) DecodedJWT {
 	}
 
 	// validate that the user account still exists
-	err = database.FindUserBy(&database.User{}, "id", tokenClaims.Subject)
+	_, err = database.FindUserBy("id", tokenClaims.Subject)
 	if err != nil {
 		return DecodedJWT{ErrorMsg: "invalid token provided"}
 	}
