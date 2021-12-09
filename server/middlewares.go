@@ -10,7 +10,6 @@ import (
 
 	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/database"
-	"github.com/Daskott/kronus/server/auth"
 	"github.com/gorilla/mux"
 )
 
@@ -56,7 +55,7 @@ func initialContextMiddleware(next http.Handler) http.Handler {
 
 		// 	Add decoded token & requestUserID to request context
 		ctx := context.WithValue(r.Context(), RequestContextKey("decodedJWT"), decodeAndVerifyAuthHeader(r.Header.Get("Authorization")))
-		ctx = context.WithValue(ctx, RequestContextKey("requestUserID"), vars["id"])
+		ctx = context.WithValue(ctx, RequestContextKey("requestUserID"), vars["uid"])
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -73,7 +72,7 @@ func protectedRouteMiddleware(next http.Handler) http.Handler {
 		}
 
 		// client is only able to update/view their own record unless client is an admin
-		if vars["id"] != "" && vars["id"] != fmt.Sprint(decodedJWT.Claims.Subject) && !decodedJWT.Claims.IsAdmin {
+		if vars["uid"] != "" && vars["uid"] != fmt.Sprint(decodedJWT.Claims.Subject) && !decodedJWT.Claims.IsAdmin {
 			writeResponse(w, ResponsePayload{Errors: []string{"action is forbidden"}}, http.StatusForbidden)
 			return
 		}
@@ -84,9 +83,16 @@ func protectedRouteMiddleware(next http.Handler) http.Handler {
 
 func adminRouteMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The very first user is allowed to create an account without a token
 		decodedJWT := r.Context().Value(RequestContextKey("decodedJWT")).(DecodedJWT)
-		if strings.Contains(decodedJWT.ErrorMsg, "no token") && !database.AtLeastOneUserExists() {
+
+		atLeastOneUserExists, err := database.AtLeastOneUserExists()
+		if err != nil {
+			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusUnauthorized)
+			return
+		}
+
+		// The very first user is allowed to create an account without a token
+		if strings.Contains(decodedJWT.ErrorMsg, "no token") && !atLeastOneUserExists {
 			if r.Method == "POST" && strings.Contains(r.RequestURI, "/users") {
 				next.ServeHTTP(w, r)
 				return
@@ -105,28 +111,4 @@ func adminRouteMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-// ---------------------------------------------------------------------------------//
-// Helper functions
-// --------------------------------------------------------------------------------//
-
-func decodeAndVerifyAuthHeader(authHeaderValue string) DecodedJWT {
-	authHeaderList := strings.Split(authHeaderValue, "Bearer ")
-	if len(authHeaderList) < 2 {
-		return DecodedJWT{ErrorMsg: "no token provided"}
-	}
-
-	tokenClaims, err := auth.DecodeJWT(authHeaderList[1])
-	if err != nil {
-		return DecodedJWT{ErrorMsg: "invalid token provided"}
-	}
-
-	// validate that the user account still exists
-	_, err = database.FindUserBy("id", tokenClaims.Subject)
-	if err != nil {
-		return DecodedJWT{ErrorMsg: "invalid token provided"}
-	}
-
-	return DecodedJWT{Claims: tokenClaims}
 }

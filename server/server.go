@@ -25,9 +25,10 @@ func Start() {
 	protectedRouter := router.NewRoute().Subrouter()
 	adminRouter := router.NewRoute().Subrouter()
 
-	protectedRouter.HandleFunc("/users/{id:[0-9]+}", findUserHandler).Methods("GET")
-	protectedRouter.HandleFunc("/users/{id:[0-9]+}", updateUserHandler).Methods("PUT")
-	protectedRouter.HandleFunc("/users/{id:[0-9]+}", deleteUserHandler).Methods("DELETE")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}", findUserHandler).Methods("GET")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}", updateUserHandler).Methods("PUT")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}", deleteUserHandler).Methods("DELETE")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/probe_settings", updateProbeSettingsHandler).Methods("PUT")
 	protectedRouter.Use(protectedRouteMiddleware)
 
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")

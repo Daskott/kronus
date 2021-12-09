@@ -10,6 +10,21 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	DEFAULT_PROBE_CRON_DAY    = "3"
+	DEFAULT_PROBE_CRON_HOUR   = "18"
+	DEFAULT_PROBE_CRON_MINUTE = "0"
+)
+
+// At minute 0 past every 18th hour on Wednesday
+var DEFAULT_PROBE_CRON_EXPRESSION = fmt.Sprintf(
+	"%v */%v * * %v", DEFAULT_PROBE_CRON_MINUTE, DEFAULT_PROBE_CRON_HOUR, DEFAULT_PROBE_CRON_DAY)
+
+// Maps day of the week to it's numeric equivalent e.g. "sun": "0", "mon": "1" ...
+var CRON_DAY_MAPPINGS = map[string]string{
+	"sun": "0", "mon": "1", "tue": "2", "wed": "3", "thu": "4", "fri": "5", "sat": "5",
+}
+
 var db *gorm.DB
 
 func init() {
@@ -36,8 +51,8 @@ type Job struct {
 
 type User struct {
 	BaseModel
-	FirstName     string        `json:"first_name"`
-	LastName      string        `json:"last_name"`
+	FirstName     string        `json:"first_name" validate:"required"`
+	LastName      string        `json:"last_name" validate:"required"`
 	PhoneNumber   string        `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
 	Email         string        `json:"email" validate:"required,email" gorm:"not null;unique"`
 	Password      string        `json:"password,omitempty" validate:"required,password" gorm:"not null"`
@@ -66,11 +81,9 @@ type Role struct {
 
 type ProbeSetting struct {
 	BaseModel
-	UserID uint `gorm:"not null;unique"`
-	Active bool `gorm:"default:false"`
-	// TODO:
-	// - When > Mon-9:00
-	// - Frequency > Weekly
+	UserID         uint `gorm:"not null;unique"`
+	Active         bool `gorm:"default:false"`
+	CronExpression string
 }
 
 type Probe struct {
@@ -109,26 +122,20 @@ func CreateUser(user *User) error {
 	}
 	user.Password = passwordHash
 
+	user.ProbeSettings = &ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
 	return db.Create(user).Error
 }
 
 func UpdateUser(id interface{}, data map[string]interface{}) error {
-	user := User{}
-
-	err := db.Select("ID", "FirstName", "LastName").First(&user, id).Error
-	if err != nil {
-		return err
-	}
-
 	if data["password"] != nil {
-		passwordHash, err := auth.HashPassword(user.Password)
+		passwordHash, err := auth.HashPassword(data["password"].(string))
 		if err != nil {
 			return err
 		}
 		data["password"] = passwordHash
 	}
 
-	return db.Model(&user).Select(
+	return db.Model(&User{}).Where("id = ?", id).Select(
 		"FirstName",
 		"LastName",
 		"PhoneNumber",
@@ -167,11 +174,17 @@ func FindUserPassword(email string) (string, error) {
 	return user.Password, nil
 }
 
-func AtLeastOneUserExists() bool {
-	if err := db.First(&User{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		return false
+func AtLeastOneUserExists() (bool, error) {
+	err := db.First(&User{}).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
 	}
-	return true
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func FindRole(name string) (*Role, error) {
@@ -184,9 +197,10 @@ func FindRole(name string) (*Role, error) {
 	return &role, nil
 }
 
-func EmergencyContact(userID uint) (*Contact, error) {
+func EmergencyContact(userID interface{}) (*Contact, error) {
 	contact := Contact{}
-	err := db.First(&contact, Contact{UserID: userID, IsEmergencyContact: true}).Error
+
+	err := db.First(&contact, "user_id = ? AND is_emergency_contact = true", userID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -209,22 +223,12 @@ func IsAdmin(user *User) (bool, error) {
 
 func UsersWithActiveProbe() ([]User, error) {
 	users := []User{}
-	probeSettings := []ProbeSetting{}
-	userIDs := []int64{}
 
-	// Fetch active probesettings
-	err := db.Find(&probeSettings).Where(&ProbeSetting{Active: true}).Error
-	if err != nil {
-		return nil, err
-	}
+	// Get users with 'active' probe set & include their probe_settings
+	err := db.Preload("ProbeSettings").Joins(
+		"INNER JOIN probe_settings ON probe_settings.user_id = users.id AND probe_settings.active = true").
+		Find(&users).Error
 
-	// Get all userIDs for probeSettings
-	for _, pbSettings := range probeSettings {
-		userIDs = append(userIDs, int64(pbSettings.UserID))
-	}
-
-	// Get users with active probe
-	err = db.Where(userIDs).Find(&users).Error
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +239,7 @@ func UsersWithActiveProbe() ([]User, error) {
 func SetProbeStatus(status string, probe *Probe) error {
 	probeStatus := ProbeStatus{}
 
-	err := db.Find(&probeStatus).Where(&ProbeStatus{Name: status}).Error
+	err := db.First(&probeStatus, &ProbeStatus{Name: status}).Error
 	if err != nil {
 		return err
 	}
@@ -251,14 +255,11 @@ func SetProbeStatus(status string, probe *Probe) error {
 
 func ProbesByStatus(status string) ([]Probe, error) {
 	probes := []Probe{}
-	probeStatus := ProbeStatus{}
 
-	err := db.Find(&probeStatus).Where(&ProbeStatus{Name: status}).Error
-	if err != nil {
-		return nil, err
-	}
+	err := db.Joins(
+		"INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?", status).
+		Find(&probes).Error
 
-	err = db.Find(&probes, "probe_status_id = ?", probeStatus.ID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -266,9 +267,18 @@ func ProbesByStatus(status string) ([]Probe, error) {
 	return probes, err
 }
 
+func LastProbe(userID uint) (*Probe, error) {
+	probe := Probe{}
+	err := db.Last(&probe, &Probe{UserID: userID}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &probe, nil
+}
+
 func CreateProbe(userID uint) error {
 	pendingProbeStatus := ProbeStatus{}
-
 	err := db.Find(&pendingProbeStatus).Where(&ProbeStatus{Name: "pending"}).Error
 	if err != nil {
 		return err
@@ -279,6 +289,10 @@ func CreateProbe(userID uint) error {
 
 func CreateEmergencyProbe(probeID, contactID uint) error {
 	return db.Create(&EmergencyProbe{ProbeID: probeID, ContactID: contactID}).Error
+}
+
+func UpdateProbSettings(userID interface{}, data map[string]interface{}) error {
+	return db.Model(&ProbeSetting{}).Where("user_id = ? ", userID).Updates(data).Error
 }
 
 func Save(value interface{}) error {
@@ -302,7 +316,7 @@ func AutoMigrate() {
 	//Insert seed data for ProbeStatus
 	if err := db.First(&ProbeStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		fmt.Println("Inserting seed data into 'ProbeStatus'")
-		db.Create(&[]ProbeStatus{{Name: "pending"}, {Name: "good"}, {Name: "bad"}, {Name: "unavailable"}})
+		db.Create(&[]ProbeStatus{{Name: "pending"}, {Name: "good"}, {Name: "bad"}, {Name: "unavailable"}, {Name: "failed"}})
 	}
 
 	//Insert seed data for JobStatus

@@ -18,7 +18,7 @@ import (
 )
 
 type ResponsePayload struct {
-	Errors  []string    `json:"errors"`
+	Errors  []string    `json:"errors,omitempty"`
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
 }
@@ -31,14 +31,7 @@ var validate *validator.Validate
 
 func init() {
 	validate = validator.New()
-	err := validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
-		// if whitespace in password return false
-		err := validate.Var(fl.Field().String(), "contains= ")
-		if err == nil {
-			return false
-		}
-		return len(fl.Field().String()) > 0
-	})
+	err := Registervalidators(validate)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -61,8 +54,14 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	atLeastOneUserExists, err := database.AtLeastOneUserExists()
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusUnauthorized)
+		return
+	}
+
 	// if no auth token and there's no user, make the 1st user an admin
-	if r.Context().Value(RequestContextKey("jwt_claims")) == nil && !database.AtLeastOneUserExists() {
+	if r.Context().Value(RequestContextKey("jwt_claims")) == nil && !atLeastOneUserExists {
 		assignedRole = "admin"
 	}
 
@@ -158,6 +157,72 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
+func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
+	var errs []string
+	params := make(map[string]interface{})
+	decoder := json.NewDecoder(r.Body)
+
+	err := decoder.Decode(&params)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	removeUnknownFields(params, map[string]bool{"day": true, "time": true, "active": true})
+	if len(params) <= 0 {
+		writeResponse(rw,
+			ResponsePayload{Errors: []string{"valid fields required"}},
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
+		errs = append(errs, "active must be boolean e.g. true/false")
+	}
+
+	if params["time"] != nil {
+		if err := validate.Var(params["time"], "time_stamp"); err != nil {
+			errs = append(errs, "valid 'time' field is required e.g. 18:30")
+		}
+	}
+
+	if params["day"] != nil && database.CRON_DAY_MAPPINGS[params["day"].(string)] == "" {
+		errs = append(errs, "valid 'day' field is required e.g. sun, mon, tue, wed, thu, fri or sat")
+	}
+
+	if len(errs) > 0 {
+		writeResponse(rw, ResponsePayload{Errors: errs}, http.StatusBadRequest)
+		return
+	}
+
+	// Only activate liveliness probe for users with emergency contact
+	if _, ok := params["active"].(bool); ok && params["active"] != nil && params["active"].(bool) {
+		contact, err := database.EmergencyContact(RequestContextKey("requestUserID"))
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+			return
+		}
+
+		if contact == nil {
+			writeResponse(rw, ResponsePayload{Errors: []string{
+				"an emergency contact is required to enable liveliness probe i.e 'active = true'"}}, http.StatusForbidden)
+			return
+		}
+	}
+
+	err = database.UpdateProbSettings(
+		r.Context().Value(RequestContextKey("requestUserID")),
+		probeSettingFieldsFromParams(params),
+	)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+}
+
 func logInHandler(rw http.ResponseWriter, r *http.Request) {
 	data := make(map[string]string)
 	decoder := json.NewDecoder(r.Body)
@@ -219,21 +284,4 @@ func jwksHandler(rw http.ResponseWriter, r *http.Request) {
 
 func healthCheckHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
-}
-
-// ---------------------------------------------------------------------------------//
-// Helper functions
-// --------------------------------------------------------------------------------//
-
-func writeResponse(rw http.ResponseWriter, payLoad interface{}, statusCode int) {
-	rw.WriteHeader(statusCode)
-	json.NewEncoder(rw).Encode(payLoad)
-}
-
-func removeUnknownFields(args map[string]interface{}, validFields map[string]bool) {
-	for key := range args {
-		if !validFields[key] {
-			delete(args, key)
-		}
-	}
 }
