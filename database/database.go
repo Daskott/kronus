@@ -81,9 +81,9 @@ type Role struct {
 
 type ProbeSetting struct {
 	BaseModel
-	UserID         uint `gorm:"not null;unique"`
-	Active         bool `gorm:"default:false"`
-	CronExpression string
+	UserID         uint   `gorm:"not null;unique"`
+	Active         bool   `gorm:"default:false"`
+	CronExpression string `gorm:"not null"`
 }
 
 type Probe struct {
