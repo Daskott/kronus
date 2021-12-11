@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -28,7 +27,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		responseWriter := &ResponseWriterWithStatus{
 			ResponseWriter: w,
-			Status:         200,
+			Status:         500, // default to 500 status
 		}
 
 		defer func() {
@@ -37,11 +36,11 @@ func loggingMiddleware(next http.Handler) http.Handler {
 				responseStatus = colors.Red(responseWriter.Status)
 			}
 
-			log.Println(
+			logg.Infof("%s  %s  %s  %s",
+				colors.Yellow(fmt.Sprintf("[%v]", time.Since(start))),
 				colors.Blue(r.Method),
 				r.RequestURI,
-				responseStatus,
-				colors.Yellow(fmt.Sprintf("[%v]", time.Since(start))))
+				responseStatus)
 		}()
 
 		next.ServeHTTP(responseWriter, r)

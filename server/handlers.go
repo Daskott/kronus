@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
-	"github.com/go-playground/validator"
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 )
@@ -25,16 +23,6 @@ type ResponsePayload struct {
 
 type TokenPayload struct {
 	Token string `json:"token"`
-}
-
-var validate *validator.Validate
-
-func init() {
-	validate = validator.New()
-	err := Registervalidators(validate)
-	if err != nil {
-		log.Panic(err)
-	}
 }
 
 func createUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -279,7 +267,7 @@ func jwksHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(rw, key.ExportJWKAsJWKS(jwk), http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: key.ExportJWKAsJWKS(jwk)}, http.StatusOK)
 }
 
 func healthCheckHandler(rw http.ResponseWriter, r *http.Request) {

@@ -2,14 +2,16 @@ package server
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/cron"
+	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/pbscheduler"
+	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 type RequestContextKey string
@@ -17,6 +19,19 @@ type RequestContextKey string
 type DecodedJWT struct {
 	Claims   *auth.KronusTokenClaims
 	ErrorMsg string
+}
+
+var validate *validator.Validate
+
+var logg *zap.SugaredLogger
+
+func init() {
+	validate = validator.New()
+	logg = logger.NewLogger()
+	err := Registervalidators(validate)
+	if err != nil {
+		logg.Panic(err)
+	}
 }
 
 func Start() {
@@ -45,10 +60,10 @@ func Start() {
 	probeScheduler.EnqueAllActiveProbes()
 	probeScheduler.CronScheduler.StartAsync()
 
-	log.Printf("Kronus server is listening on port:%v...\n", port)
+	logg.Infof("Kronus server is listening on port:%v", port)
 	err := http.ListenAndServe(fmt.Sprintf(":%v", port), router)
 	if err != nil {
-		log.Fatal(err)
+		logg.Fatal(err)
 
 	}
 }

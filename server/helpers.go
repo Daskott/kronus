@@ -16,7 +16,15 @@ import (
 // Handler Helper functions
 // --------------------------------------------------------------------------------//
 
-func writeResponse(rw http.ResponseWriter, payLoad interface{}, statusCode int) {
+func writeResponse(rw http.ResponseWriter, payLoad ResponsePayload, statusCode int) {
+	if statusCode >= http.StatusInternalServerError {
+		logg.Error(payLoad.Errors)
+	}
+
+	if statusCode >= http.StatusBadRequest {
+		logg.Info(payLoad.Errors)
+	}
+
 	rw.WriteHeader(statusCode)
 	json.NewEncoder(rw).Encode(payLoad)
 }

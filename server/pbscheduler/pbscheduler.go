@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/server/logger"
 	"github.com/go-co-op/gocron"
 	"gorm.io/gorm"
 )
@@ -19,6 +19,8 @@ const (
 	MAX_PROBE_RETRIES          = 3
 	MIN_HOURS_BEFORE_NEW_PROBE = 23
 )
+
+var logg = logger.NewLogger()
 
 type ProbeScheduler struct {
 	CronScheduler *gocron.Scheduler
@@ -40,7 +42,7 @@ func (pScheduler ProbeScheduler) EnqueAllActiveProbes() error {
 	for _, user := range users {
 		pScheduler.EnqueProbe(user)
 	}
-	log.Printf(colors.Blue("%v probe(s) enqued"), len(users))
+	logg.Infof("%v probe(s) enqued", len(users))
 
 	return nil
 }
@@ -69,14 +71,14 @@ func jobTag(userID interface{}) string {
 func sendLivelinessProbe(user database.User) error {
 	lastProbe, err := database.LastProbe(user.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Println(err)
+		logg.Error(err)
 		return fmt.Errorf("sendLivelinessProbe: %v", err)
 	}
 
 	// New liveliness probe should be sent atleast 23 hrs after the last one
 	if lastProbe != nil && time.Since(lastProbe.CreatedAt) < time.Duration(MIN_HOURS_BEFORE_NEW_PROBE)*time.Hour {
-		log.Printf("it's not been up to %vhrs since the last probe, "+
-			"skipping liveliness probe for user=%v", MIN_HOURS_BEFORE_NEW_PROBE, user.ID)
+		logg.Infof("it's not been up to %vhrs since the last probe, "+
+			"skipping liveliness probe for userID=%v", MIN_HOURS_BEFORE_NEW_PROBE, user.ID)
 		return nil
 	}
 
@@ -142,7 +144,7 @@ func sendEmergencyProbe(probe database.Probe) error {
 	// TODO: Retry, but in worst case scenario, it's okay to fail
 	err = database.CreateEmergencyProbe(probe.ID, emergencyContact.ID)
 	if err != nil {
-		log.Println(err)
+		logg.Error(err)
 	}
 
 	return nil
@@ -176,17 +178,17 @@ func sendFollowUpsForProbes() {
 
 		err = sendFollowupForProbe(probe)
 		if err != nil {
-			log.Println(err)
+			logg.Error(err)
 			continue
 		}
 		noOfFollowupsSent++
 	}
 
-	log.Printf(colors.Blue("followups: %v pending probe(s) found"), len(probes))
-	log.Printf(colors.Blue("followups: %v probe followup messages(s) sent"), noOfFollowupsSent)
+	logg.Infof("followups: %v pending probe(s) found", len(probes))
+	logg.Infof("followups: %v probe followup messages(s) sent", noOfFollowupsSent)
 }
 
 func sendMessage(message string) error {
-	log.Println(message)
+	logg.Infof(message)
 	return nil
 }
