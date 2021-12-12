@@ -13,11 +13,10 @@ import (
 )
 
 const (
-	PENDING_PROBE              = "pending"
-	UNAVAILABLE_PROBE          = "unavailable"
-	PROBE_PREFIX               = "probe"
-	MAX_PROBE_RETRIES          = 3
-	MIN_HOURS_BEFORE_NEW_PROBE = 23
+	PENDING_PROBE     = "pending"
+	UNAVAILABLE_PROBE = "unavailable"
+	PROBE_PREFIX      = "probe"
+	MAX_PROBE_RETRIES = 3
 )
 
 var logg = logger.NewLogger()
@@ -72,26 +71,32 @@ func sendLivelinessProbe(user database.User) error {
 	lastProbe, err := database.LastProbe(user.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		logg.Error(err)
-		return fmt.Errorf("sendLivelinessProbe: %v", err)
+		return err
 	}
 
-	// New liveliness probe should be sent atleast 23 hrs after the last one
-	if lastProbe != nil && time.Since(lastProbe.CreatedAt) < time.Duration(MIN_HOURS_BEFORE_NEW_PROBE)*time.Hour {
-		logg.Infof("it's not been up to %vhrs since the last probe, "+
-			"skipping liveliness probe for userID=%v", MIN_HOURS_BEFORE_NEW_PROBE, user.ID)
+	pendingProbeStatus, err := database.FindProbeStatus(PENDING_PROBE)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		logg.Error(err)
+		return err
+	}
+
+	if lastProbe != nil && lastProbe.ProbeStatusID == pendingProbeStatus.ID {
+		logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending", user.ID)
 		return nil
 	}
 
 	msg := fmt.Sprintf("Are you okay %v?", user.FirstName)
 	err = sendMessage(msg)
 	if err != nil {
-		return fmt.Errorf("sendLivelinessProbe: %v", err)
+		logg.Error(err)
+		return err
 	}
 
 	// Create record of initial probe msg sent to usser in db
 	err = database.CreateProbe(user.ID)
 	if err != nil {
-		return fmt.Errorf("sendLivelinessProbe: %v", err)
+		logg.Error(err)
+		return err
 	}
 
 	return nil
@@ -101,13 +106,13 @@ func sendFollowupForProbe(probe database.Probe) error {
 	msg := fmt.Sprintf("Are you okay %v??", probe.UserID)
 	err := sendMessage(msg)
 	if err != nil {
-		return fmt.Errorf("sendFollowupForProbe: %v", err)
+		return err
 	}
 
 	probe.RetryCount += 1
 	database.Save(&probe)
 	if err != nil {
-		return fmt.Errorf("sendFollowupForProbe: %v", err)
+		return err
 	}
 
 	return nil
@@ -146,6 +151,8 @@ func sendEmergencyProbe(probe database.Probe) error {
 	if err != nil {
 		logg.Error(err)
 	}
+
+	// TODO: Turn off liveliness probe for user
 
 	return nil
 }

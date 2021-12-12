@@ -267,6 +267,16 @@ func ProbesByStatus(status string) ([]Probe, error) {
 	return probes, err
 }
 
+func FindProbeStatus(name string) (*ProbeStatus, error) {
+	probeStatus := ProbeStatus{}
+	err := db.Select("ID", "Name").First(&probeStatus, "name = ?", name).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &probeStatus, nil
+}
+
 func LastProbe(userID uint) (*Probe, error) {
 	probe := Probe{}
 	err := db.Last(&probe, &Probe{UserID: userID}).Error
@@ -322,7 +332,7 @@ func AutoMigrate() {
 	//Insert seed data for JobStatus
 	if err := db.First(&JobStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		fmt.Println("Inserting seed data into 'JobStatus'")
-		db.Create(&[]JobStatus{{Name: "pending"}, {Name: "successful"}, {Name: "failed"}})
+		db.Create(&[]JobStatus{{Name: "enqueued"}, {Name: "in-progress"}, {Name: "successful"}, {Name: "failed"}, {Name: "dead"}})
 	}
 
 	//Insert seed data for Role
