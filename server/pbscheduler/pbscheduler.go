@@ -196,7 +196,7 @@ func sendLivelinessProbe(params map[string]interface{}) error {
 		return nil
 	}
 
-	msg := fmt.Sprintf("Are you okay %v?", strings.ToUpper(params["first_name"].(string)))
+	msg := fmt.Sprintf("Are you okay %v?", strings.Title(params["first_name"].(string)))
 	err = sendMessage(msg)
 	if err != nil {
 		logg.Error(err)
@@ -219,7 +219,7 @@ func sendFollowupForProbe(params map[string]interface{}) error {
 		return err
 	}
 
-	msg := fmt.Sprintf("Are you okay %v??", strings.ToUpper(user.FirstName))
+	msg := fmt.Sprintf("Are you okay %v??", strings.Title(user.FirstName))
 	err = sendMessage(msg)
 	if err != nil {
 		return err
@@ -261,7 +261,7 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 			"you're getting this message becasue you're %v's"+
 			"emergency contact. %v missed their last routine check in, can you please reach out to make sure their okay?\n"+
 			"Thanks",
-		strings.ToUpper(emergencyContact.FirstName), strings.ToUpper(user.FirstName), strings.ToUpper(user.FirstName))
+		strings.Title(emergencyContact.FirstName), strings.Title(user.FirstName), strings.Title(user.FirstName))
 
 	// Send message to emergency contact
 	sendMessage(message)
