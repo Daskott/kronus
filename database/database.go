@@ -3,11 +3,14 @@ package database
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/Daskott/kronus/server/auth"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const (
@@ -16,9 +19,9 @@ const (
 	DEFAULT_PROBE_CRON_MINUTE = "0"
 )
 
-// At minute 0 past every 18th hour on Wednesday
+// At 18:00 every Wednesday
 var DEFAULT_PROBE_CRON_EXPRESSION = fmt.Sprintf(
-	"%v */%v * * %v", DEFAULT_PROBE_CRON_MINUTE, DEFAULT_PROBE_CRON_HOUR, DEFAULT_PROBE_CRON_DAY)
+	"%v %v * * %v", DEFAULT_PROBE_CRON_MINUTE, DEFAULT_PROBE_CRON_HOUR, DEFAULT_PROBE_CRON_DAY)
 
 // Maps day of the week to it's numeric equivalent e.g. "sun": "0", "mon": "1" ...
 var CRON_DAY_MAPPINGS = map[string]string{
@@ -30,7 +33,14 @@ var db *gorm.DB
 func init() {
 	var err error
 	dsn := "root:password@tcp(127.0.0.1:3306)/kronus?charset=utf8mb4&parseTime=True&loc=Local"
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			LogLevel:                  logger.Silent,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)})
 	if err != nil {
 		panic("failed to connect database")
 	}
@@ -44,8 +54,12 @@ type BaseModel struct {
 
 type Job struct {
 	BaseModel
-	RetryCount  int
-	Task        string
+	Fails       int
+	Name        string
+	Handler     string
+	Args        string
+	LastError   string
+	Claimed     bool `gorm:"default:false"`
 	JobStatusID uint
 }
 
@@ -236,7 +250,7 @@ func UsersWithActiveProbe() ([]User, error) {
 	return users, nil
 }
 
-func SetProbeStatus(status string, probe *Probe) error {
+func SetProbeStatus(probeID interface{}, status string) error {
 	probeStatus := ProbeStatus{}
 
 	err := db.First(&probeStatus, &ProbeStatus{Name: status}).Error
@@ -244,8 +258,7 @@ func SetProbeStatus(status string, probe *Probe) error {
 		return err
 	}
 
-	probe.ProbeStatusID = probeStatus.ID
-	err = db.Save(probe).Error
+	err = db.Model(&Probe{}).Where("id = ?", probeID).Update("probe_status_id", probeStatus.ID).Error
 	if err != nil {
 		return err
 	}
@@ -277,9 +290,9 @@ func FindProbeStatus(name string) (*ProbeStatus, error) {
 	return &probeStatus, nil
 }
 
-func LastProbe(userID uint) (*Probe, error) {
+func LastProbeForUser(userID interface{}) (*Probe, error) {
 	probe := Probe{}
-	err := db.Last(&probe, &Probe{UserID: userID}).Error
+	err := db.Last(&probe).Where("userID = ?", userID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -287,22 +300,135 @@ func LastProbe(userID uint) (*Probe, error) {
 	return &probe, nil
 }
 
-func CreateProbe(userID uint) error {
+func FindProbe(id interface{}) (*Probe, error) {
+	probe := Probe{}
+	err := db.First(&probe, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &probe, nil
+}
+
+func CreateProbe(userID interface{}) error {
+	currentTime := time.Now()
 	pendingProbeStatus := ProbeStatus{}
 	err := db.Find(&pendingProbeStatus).Where(&ProbeStatus{Name: "pending"}).Error
 	if err != nil {
 		return err
 	}
 
-	return db.Create(&Probe{UserID: userID, ProbeStatusID: pendingProbeStatus.ID}).Error
+	return db.Model(&Probe{}).Create(map[string]interface{}{
+		"user_id":         userID,
+		"probe_status_id": pendingProbeStatus.ID,
+		"created_at":      currentTime,
+		"updated_at":      currentTime,
+	}).Error
 }
 
-func CreateEmergencyProbe(probeID, contactID uint) error {
-	return db.Create(&EmergencyProbe{ProbeID: probeID, ContactID: contactID}).Error
+func CreateEmergencyProbe(probeID, contactID interface{}) error {
+	currentTime := time.Now()
+	return db.Model(&EmergencyProbe{}).Create(map[string]interface{}{
+		"probe_id":   probeID,
+		"contact_id": contactID,
+		"created_at": currentTime,
+		"updated_at": currentTime,
+	}).Error
 }
 
 func UpdateProbSettings(userID interface{}, data map[string]interface{}) error {
 	return db.Model(&ProbeSetting{}).Where("user_id = ? ", userID).Updates(data).Error
+}
+
+func CreateJob(name string, handler string, args string) error {
+	enqueuedJobStatus := ProbeStatus{}
+	err := db.Find(&enqueuedJobStatus).Where(&JobStatus{Name: "enqueued"}).Error
+	if err != nil {
+		return err
+	}
+
+	return db.Create(&Job{Name: name, Handler: handler, Args: args, JobStatusID: enqueuedJobStatus.ID}).Error
+}
+
+func CreateUniqueJobByName(name string, handler string, args string) error {
+	queuedJobStatuses := []JobStatus{}
+	err := db.Find(&queuedJobStatuses).Where("name IN ('enqueued', 'in-progress')").Error
+	if err != nil {
+		return err
+	}
+
+	// Check to see if a job with a similar name is either enqueued or in-progress
+	// if one exists, return 'duplicate' error
+	statusIDs := []uint{queuedJobStatuses[0].ID, queuedJobStatuses[1].ID}
+	results := db.Where("name = ? AND job_status_id IN ?", name, statusIDs).First(&Job{})
+
+	if results.Error != nil && !errors.Is(results.Error, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	if results.RowsAffected > 0 {
+		return fmt.Errorf("duplicate job isn't enqueued")
+	}
+
+	var enqueuedJobStatus JobStatus
+	for _, jobStatus := range queuedJobStatuses {
+		if jobStatus.Name == "enqueued" {
+			enqueuedJobStatus = jobStatus
+			break
+		}
+	}
+
+	return db.Create(&Job{Name: name, Handler: handler, Args: args, JobStatusID: enqueuedJobStatus.ID}).Error
+}
+
+func LastJob(status string, claimed bool) (*Job, error) {
+	enqueuedJobStatus := JobStatus{}
+	err := db.Find(&enqueuedJobStatus).Where(&JobStatus{Name: status}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	job := Job{}
+	err = db.Last(&job, Job{JobStatusID: enqueuedJobStatus.ID, Claimed: claimed}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &job, nil
+}
+
+func ClaimJob(jobID uint) (bool, error) {
+	res := db.Model(&Job{}).Where("id = ? AND claimed = ?", jobID, false).Update("claimed", true)
+
+	if res.Error != nil {
+		return false, res.Error
+	}
+
+	return res.RowsAffected > 0, nil
+}
+
+func UpdateJobStatus(jobID uint, status string) error {
+	jobStatus := JobStatus{}
+	err := db.Find(&jobStatus).Where(&JobStatus{Name: status}).Error
+	if err != nil {
+		return err
+	}
+
+	return db.Model(&Job{}).Where("ID = ?", jobID).Update("JobStatusID", jobStatus.ID).Error
+}
+
+func UpdateJob(jobID uint, data map[string]interface{}) error {
+	return db.Table("jobs").Where("id = ?", jobID).Updates(data).Error
+}
+
+func FindJobStatus(name string) (*JobStatus, error) {
+	jobStatus := JobStatus{}
+	err := db.Select("ID", "Name").First(&jobStatus, "name = ?", name).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &jobStatus, nil
 }
 
 func Save(value interface{}) error {
@@ -326,7 +452,7 @@ func AutoMigrate() {
 	//Insert seed data for ProbeStatus
 	if err := db.First(&ProbeStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		fmt.Println("Inserting seed data into 'ProbeStatus'")
-		db.Create(&[]ProbeStatus{{Name: "pending"}, {Name: "good"}, {Name: "bad"}, {Name: "unavailable"}, {Name: "failed"}})
+		db.Create(&[]ProbeStatus{{Name: "pending"}, {Name: "good"}, {Name: "bad"}, {Name: "unavailable"}, {Name: "cancelled"}})
 	}
 
 	//Insert seed data for JobStatus
@@ -339,11 +465,5 @@ func AutoMigrate() {
 	if err := db.First(&Role{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		fmt.Println("Inserting seed data into 'Role'")
 		db.Create(&[]Role{{Name: "admin"}, {Name: "basic"}})
-	}
-
-	//Insert seed data for Probsettings
-	if err := db.First(&ProbeSetting{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		fmt.Println("Inserting seed data into 'ProbeSetting'")
-		db.Create(&[]ProbeSetting{{Active: true, UserID: 4}})
 	}
 }

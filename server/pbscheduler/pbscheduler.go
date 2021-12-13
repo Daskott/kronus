@@ -1,12 +1,14 @@
 package pbscheduler
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"log"
+	"strings"
 	"time"
 
 	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/server/job"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/go-co-op/gocron"
 	"gorm.io/gorm"
@@ -15,159 +17,118 @@ import (
 const (
 	PENDING_PROBE     = "pending"
 	UNAVAILABLE_PROBE = "unavailable"
-	PROBE_PREFIX      = "probe"
 	MAX_PROBE_RETRIES = 3
+
+	SEND_LIVELINESS_PROBE_HANDLER = "send_liveliness_probe"
+	SEND_FOLLOWUP_PROBE_HANDLER   = "send_followup_probe"
+	SEND_EMERGENCY_PROBE_HANDLER  = "send_emergency_probe"
 )
 
 var logg = logger.NewLogger()
 
 type ProbeScheduler struct {
 	CronScheduler *gocron.Scheduler
+	WorkerAdapter *job.WorkerAdapter
 }
 
+// NewProbeScheduler creates new probe scheduler
 func NewProbeScheduler(cronScheduler *gocron.Scheduler) *ProbeScheduler {
-	probeScheduler := ProbeScheduler{CronScheduler: cronScheduler}
-	probeScheduler.enqueFollowupJobsForProbes()
+	probeScheduler := ProbeScheduler{
+		CronScheduler: cronScheduler,
+		WorkerAdapter: job.NewWorkerAdapter(),
+	}
+
+	// Register worker handlers
+	probeScheduler.WorkerAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, sendLivelinessProbe)
+	probeScheduler.WorkerAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, sendFollowupForProbe)
+	probeScheduler.WorkerAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, sendEmergencyProbe)
+
+	// Create cron jobs
+	probeScheduler.setCronJobsForInitialProbes()
+	probeScheduler.setCronJobsForFollowupProbes()
 
 	return &probeScheduler
 }
 
-func (pScheduler ProbeScheduler) EnqueAllActiveProbes() error {
+// AddCronJobForProbe creates 'liveliness probe' cron jobs for user.
+// And when each cron is triggered, the job is sent to a job to be executed.
+func (pScheduler ProbeScheduler) AddCronJobForProbe(user database.User) {
+	pScheduler.CronScheduler.Cron(user.ProbeSettings.CronExpression).
+		Tag(probeName(user.ID)).
+		Do(
+			func() {
+				// Enqueue liveliness probe job for user when cron job is triggered
+				pScheduler.WorkerAdapter.Perform(job.JobParams{
+					Name:    probeName(user.ID),
+					Handler: SEND_LIVELINESS_PROBE_HANDLER,
+					Args: map[string]interface{}{
+						"user_id":    user.ID,
+						"first_name": user.FirstName,
+						"last_name":  user.LastName,
+					},
+					Unique: true,
+				})
+			},
+		)
+}
+
+// RemoveCronJob removes cron job from scheduler
+func (pScheduler ProbeScheduler) RemoveCronJob(tag string) {
+	pScheduler.CronScheduler.RemoveByTag(tag)
+}
+
+// StartWorkers starts cron jobs and job worker
+func (pScheduler ProbeScheduler) StartWorkers() {
+	// Start cron jobs that handle enqueuing of 'probe' jobs
+	pScheduler.CronScheduler.StartAsync()
+
+	// Start worker that executes queued jobs
+	pScheduler.WorkerAdapter.Start(context.TODO())
+}
+
+// Creates 'liveliness probe' cron jobs for users with 'active' probe_settings.
+// And when each cron is triggered, the job is sent to a queue to be executed.
+func (pScheduler ProbeScheduler) setCronJobsForInitialProbes() error {
 	users, err := database.UsersWithActiveProbe()
 	if err != nil {
 		return err
 	}
 
 	for _, user := range users {
-		pScheduler.EnqueProbe(user)
+		pScheduler.AddCronJobForProbe(user)
 	}
-	logg.Infof("%v probe(s) enqued", len(users))
+	logg.Infof("%v liveliness probe(s) cron scheduled", len(users))
 
 	return nil
 }
 
-func (pScheduler ProbeScheduler) EnqueProbe(user database.User) {
-	pScheduler.CronScheduler.Cron(user.ProbeSettings.CronExpression).
-		Tag(jobTag(user.ID)).Do(func() { sendLivelinessProbe(user) })
+// Creates 'followup probe' cron jobs for users with 'pending' liveliness probes.
+// And when each cron is triggered i.e every 30mins, followup jobs are sent to a queue to be executed.
+func (pScheduler ProbeScheduler) setCronJobsForFollowupProbes() {
+	pScheduler.CronScheduler.Every("30m").Do(pScheduler.sendFollowUpsForProbes)
 }
 
-func (pScheduler ProbeScheduler) DequeProbe(tag string) {
-	pScheduler.CronScheduler.RemoveByTag(tag)
-}
-
-func (pScheduler ProbeScheduler) enqueFollowupJobsForProbes() {
-	pScheduler.CronScheduler.Every("30m").Do(sendFollowUpsForProbes)
-}
-
-// ---------------------------------------------------------------------------------//
-// Helper functions
-// --------------------------------------------------------------------------------//
-
-func jobTag(userID interface{}) string {
-	return fmt.Sprintf("%v_%v", PROBE_PREFIX, userID)
-}
-
-func sendLivelinessProbe(user database.User) error {
-	lastProbe, err := database.LastProbe(user.ID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		logg.Error(err)
-		return err
-	}
-
-	pendingProbeStatus, err := database.FindProbeStatus(PENDING_PROBE)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		logg.Error(err)
-		return err
-	}
-
-	if lastProbe != nil && lastProbe.ProbeStatusID == pendingProbeStatus.ID {
-		logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending", user.ID)
-		return nil
-	}
-
-	msg := fmt.Sprintf("Are you okay %v?", user.FirstName)
-	err = sendMessage(msg)
-	if err != nil {
-		logg.Error(err)
-		return err
-	}
-
-	// Create record of initial probe msg sent to usser in db
-	err = database.CreateProbe(user.ID)
-	if err != nil {
-		logg.Error(err)
-		return err
-	}
-
-	return nil
-}
-
-func sendFollowupForProbe(probe database.Probe) error {
-	msg := fmt.Sprintf("Are you okay %v??", probe.UserID)
-	err := sendMessage(msg)
-	if err != nil {
-		return err
-	}
-
-	probe.RetryCount += 1
-	database.Save(&probe)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func sendEmergencyProbe(probe database.Probe) error {
-	// Set user liveliness probe status to 'unavailable'
-	err := database.SetProbeStatus("unavailable", &probe)
-	if err != nil {
-		return err
-	}
-
-	emergencyContact, err := database.EmergencyContact(probe.UserID)
-	if err != nil {
-		return err
-	}
-
-	user, err := database.FindUserBy("ID", probe.UserID)
-	if err != nil {
-		return err
-	}
-
-	message := fmt.Sprintf(
-		"Hi %v,\n"+
-			"you're getting this message becasue you're %v's"+
-			"emergency contact. %v missed their check in, can you please reach out to make sure their okay?\n"+
-			"Thanks",
-		emergencyContact.FirstName, user.FirstName, user.FirstName)
-
-	// Send message to emergency contact
-	sendMessage(message)
-
-	// Record emregency probe sent out
-	// TODO: Retry, but in worst case scenario, it's okay to fail
-	err = database.CreateEmergencyProbe(probe.ID, emergencyContact.ID)
-	if err != nil {
-		logg.Error(err)
-	}
-
-	// TODO: Turn off liveliness probe for user
-
-	return nil
-}
-
-func sendFollowUpsForProbes() {
-	noOfFollowupsSent := 0
+func (pScheduler ProbeScheduler) sendFollowUpsForProbes() {
+	noOfFollowupProbeJobsQueued := 0
 	probes, err := database.ProbesByStatus(PENDING_PROBE)
 	if err != nil {
-		log.Printf("Error: followUpProbes:%v\n", err)
+		logg.Error(err)
 		return
 	}
 
 	for _, probe := range probes {
+		jobArgs := make(map[string]interface{})
+		jobArgs["user_id"] = probe.UserID
+		jobArgs["probe_id"] = probe.ID
+
+		// if max retries is exceeded, send emergency probe
 		if probe.RetryCount >= MAX_PROBE_RETRIES {
-			go sendEmergencyProbe(probe)
+			pScheduler.WorkerAdapter.Perform(job.JobParams{
+				Name:    emergencyProbeName(probe.UserID),
+				Handler: SEND_EMERGENCY_PROBE_HANDLER,
+				Args:    jobArgs,
+				Unique:  true,
+			})
 			continue
 		}
 
@@ -183,16 +144,138 @@ func sendFollowUpsForProbes() {
 			continue
 		}
 
-		err = sendFollowupForProbe(probe)
+		err = pScheduler.WorkerAdapter.Perform(job.JobParams{
+			Name:    followupProbeName(probe.UserID),
+			Handler: SEND_FOLLOWUP_PROBE_HANDLER,
+			Args:    jobArgs,
+			Unique:  true,
+		})
+
 		if err != nil {
 			logg.Error(err)
 			continue
 		}
-		noOfFollowupsSent++
+		noOfFollowupProbeJobsQueued++
 	}
 
-	logg.Infof("followups: %v pending probe(s) found", len(probes))
-	logg.Infof("followups: %v probe followup messages(s) sent", noOfFollowupsSent)
+	logg.Infof("%v pending liveliness probe(s) found", len(probes))
+	logg.Infof("%v followup probe job(s) queued", noOfFollowupProbeJobsQueued)
+}
+
+// ---------------------------------------------------------------------------------//
+// Helper functions
+// --------------------------------------------------------------------------------//
+
+func probeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_LIVELINESS_PROBE_HANDLER, userID)
+}
+
+func followupProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_FOLLOWUP_PROBE_HANDLER, userID)
+}
+
+func emergencyProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
+}
+
+func sendLivelinessProbe(params map[string]interface{}) error {
+	lastProbe, err := database.LastProbeForUser(params["user_id"])
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		logg.Error(err)
+		return err
+	}
+
+	pendingProbeStatus, err := database.FindProbeStatus(PENDING_PROBE)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		logg.Error(err)
+		return err
+	}
+
+	if lastProbe != nil && lastProbe.ProbeStatusID == pendingProbeStatus.ID {
+		logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending", params["user_id"])
+		return nil
+	}
+
+	msg := fmt.Sprintf("Are you okay %v?", strings.ToUpper(params["first_name"].(string)))
+	err = sendMessage(msg)
+	if err != nil {
+		logg.Error(err)
+		return err
+	}
+
+	// Create record of initial probe msg sent to usser in db
+	err = database.CreateProbe(params["user_id"])
+	if err != nil {
+		logg.Error(err)
+		return err
+	}
+
+	return nil
+}
+
+func sendFollowupForProbe(params map[string]interface{}) error {
+	user, err := database.FindUserBy("id", params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("Are you okay %v??", strings.ToUpper(user.FirstName))
+	err = sendMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	probe, err := database.FindProbe(params["probe_id"])
+	if err != nil {
+		return err
+	}
+
+	probe.RetryCount += 1
+	database.Save(&probe)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func sendEmergencyProbe(params map[string]interface{}) error {
+	// Set user liveliness probe status to 'unavailable'
+	err := database.SetProbeStatus(params["probe_id"], "unavailable")
+	if err != nil {
+		return err
+	}
+
+	emergencyContact, err := database.EmergencyContact(params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	user, err := database.FindUserBy("id", params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	message := fmt.Sprintf(
+		"Hi %v,\n"+
+			"you're getting this message becasue you're %v's"+
+			"emergency contact. %v missed their last routine check in, can you please reach out to make sure their okay?\n"+
+			"Thanks",
+		strings.ToUpper(emergencyContact.FirstName), strings.ToUpper(user.FirstName), strings.ToUpper(user.FirstName))
+
+	// Send message to emergency contact
+	sendMessage(message)
+
+	// Record emregency probe sent out
+	// TODO: Retry, but in worst case scenario, it's okay to fail
+	err = database.CreateEmergencyProbe(params["probe_id"], emergencyContact.ID)
+	if err != nil {
+		logg.Error(err)
+	}
+
+	// TODO: Turn off liveliness probe for user
+
+	return nil
 }
 
 func sendMessage(message string) error {

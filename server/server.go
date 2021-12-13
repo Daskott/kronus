@@ -57,8 +57,7 @@ func Start() {
 	database.AutoMigrate()
 
 	probeScheduler := pbscheduler.NewProbeScheduler(cron.CronScheduler)
-	probeScheduler.EnqueAllActiveProbes()
-	probeScheduler.CronScheduler.StartAsync()
+	probeScheduler.StartWorkers()
 
 	logg.Infof("Kronus server is listening on port:%v", port)
 	err := http.ListenAndServe(fmt.Sprintf(":%v", port), router)
