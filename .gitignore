@@ -16,6 +16,8 @@ todo.md
 .kronus.dev.yaml
 
 private_key_dev.pem
+sqlite_query_dev.sql
+test.db
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

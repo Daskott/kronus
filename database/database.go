@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/Daskott/kronus/server/auth"
-	"gorm.io/driver/mysql"
+	"github.com/Daskott/kronus/server/logger"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormLogger "gorm.io/gorm/logger"
 )
 
 const (
@@ -19,28 +20,35 @@ const (
 	DEFAULT_PROBE_CRON_MINUTE = "0"
 )
 
-// At 18:00 every Wednesday
-var DEFAULT_PROBE_CRON_EXPRESSION = fmt.Sprintf(
-	"%v %v * * %v", DEFAULT_PROBE_CRON_MINUTE, DEFAULT_PROBE_CRON_HOUR, DEFAULT_PROBE_CRON_DAY)
+var (
+	ErrDuplicateJob = errors.New("job with the given name already exists in queue")
 
-// Maps day of the week to it's numeric equivalent e.g. "sun": "0", "mon": "1" ...
-var CRON_DAY_MAPPINGS = map[string]string{
-	"sun": "0", "mon": "1", "tue": "2", "wed": "3", "thu": "4", "fri": "5", "sat": "5",
-}
+	// At 18:00 every Wednesday
+	DEFAULT_PROBE_CRON_EXPRESSION = fmt.Sprintf(
+		"%v %v * * %v", DEFAULT_PROBE_CRON_MINUTE, DEFAULT_PROBE_CRON_HOUR, DEFAULT_PROBE_CRON_DAY)
+
+	// Maps day of the week to it's numeric equivalent e.g. "sun": "0", "mon": "1" ...
+	CRON_DAY_MAPPINGS = map[string]string{
+		"sun": "0", "mon": "1", "tue": "2", "wed": "3", "thu": "4", "fri": "5", "sat": "5",
+	}
+
+	logg = logger.NewLogger()
+)
 
 var db *gorm.DB
 
 func init() {
 	var err error
-	dsn := "root:password@tcp(127.0.0.1:3306)/kronus?charset=utf8mb4&parseTime=True&loc=Local"
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.New(
-		log.New(os.Stdout, "\r\n", log.LstdFlags),
-		logger.Config{
-			LogLevel:                  logger.Silent,
-			IgnoreRecordNotFoundError: true,
-			Colorful:                  false,
-		},
-	)})
+	db, err = gorm.Open(sqlite.Open("test.db"), &gorm.Config{
+		Logger: gormLogger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			gormLogger.Config{
+				LogLevel:                  gormLogger.Silent,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  false,
+			},
+		),
+	})
 	if err != nil {
 		panic("failed to connect database")
 	}
@@ -357,7 +365,7 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 		return err
 	}
 
-	// Check to see if a job with a similar name is either enqueued or in-progress
+	// Check to see if a job with the same name is either enqueued or in-progress
 	// if one exists, return 'duplicate' error
 	statusIDs := []uint{queuedJobStatuses[0].ID, queuedJobStatuses[1].ID}
 	results := db.Where("name = ? AND job_status_id IN ?", name, statusIDs).First(&Job{})
@@ -367,7 +375,7 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 	}
 
 	if results.RowsAffected > 0 {
-		return fmt.Errorf("duplicate job isn't enqueued")
+		return ErrDuplicateJob
 	}
 
 	var enqueuedJobStatus JobStatus
@@ -378,7 +386,13 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 		}
 	}
 
-	return db.Create(&Job{Name: name, Handler: handler, Args: args, JobStatusID: enqueuedJobStatus.ID}).Error
+	// If a job with the given name already exists & is 'enqueued', do nothing
+	return db.FirstOrCreate(&Job{
+		Name:        name,
+		Handler:     handler,
+		Args:        args,
+		JobStatusID: enqueuedJobStatus.ID,
+	}, Job{Name: name, JobStatusID: enqueuedJobStatus.ID}).Error
 }
 
 func LastJob(status string, claimed bool) (*Job, error) {
@@ -389,7 +403,7 @@ func LastJob(status string, claimed bool) (*Job, error) {
 	}
 
 	job := Job{}
-	err = db.Last(&job, Job{JobStatusID: enqueuedJobStatus.ID, Claimed: claimed}).Error
+	err = db.Where("job_status_id = ? AND claimed = ?", enqueuedJobStatus.ID, claimed).Last(&job).Error
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +412,16 @@ func LastJob(status string, claimed bool) (*Job, error) {
 }
 
 func ClaimJob(jobID uint) (bool, error) {
-	res := db.Model(&Job{}).Where("id = ? AND claimed = ?", jobID, false).Update("claimed", true)
+	inProgressStatus := JobStatus{}
+	err := db.Find(&inProgressStatus).Where(&JobStatus{Name: "in-progress"}).Error
+	if err != nil {
+		return false, err
+	}
+
+	res := db.Model(&Job{}).Where("id = ? AND claimed = ?", jobID, false).Updates(map[string]interface{}{
+		"claimed":       true,
+		"job_status_id": inProgressStatus.ID,
+	})
 
 	if res.Error != nil {
 		return false, res.Error
@@ -451,19 +474,19 @@ func AutoMigrate() {
 
 	//Insert seed data for ProbeStatus
 	if err := db.First(&ProbeStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		fmt.Println("Inserting seed data into 'ProbeStatus'")
+		logg.Info("Inserting seed data into 'ProbeStatus'")
 		db.Create(&[]ProbeStatus{{Name: "pending"}, {Name: "good"}, {Name: "bad"}, {Name: "unavailable"}, {Name: "cancelled"}})
 	}
 
 	//Insert seed data for JobStatus
 	if err := db.First(&JobStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		fmt.Println("Inserting seed data into 'JobStatus'")
-		db.Create(&[]JobStatus{{Name: "enqueued"}, {Name: "in-progress"}, {Name: "successful"}, {Name: "failed"}, {Name: "dead"}})
+		logg.Info("Inserting seed data into 'JobStatus'")
+		db.Create(&[]JobStatus{{Name: "enqueued"}, {Name: "in-progress"}, {Name: "successful"}, {Name: "dead"}})
 	}
 
 	//Insert seed data for Role
 	if err := db.First(&Role{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		fmt.Println("Inserting seed data into 'Role'")
+		logg.Info("Inserting seed data into 'Role'")
 		db.Create(&[]Role{{Name: "admin"}, {Name: "basic"}})
 	}
 }
