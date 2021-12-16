@@ -147,6 +147,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
+	userID := r.Context().Value(RequestContextKey("requestUserID"))
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
 
@@ -186,7 +187,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	// Only activate liveliness probe for users with emergency contact
 	if _, ok := params["active"].(bool); ok && params["active"] != nil && params["active"].(bool) {
-		contact, err := database.EmergencyContact(RequestContextKey("requestUserID"))
+		contact, err := database.EmergencyContact(userID)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
@@ -199,10 +200,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = database.UpdateProbSettings(
-		r.Context().Value(RequestContextKey("requestUserID")),
-		probeSettingFieldsFromParams(params),
-	)
+	err = database.UpdateProbSettings(userID, probeSettingFieldsFromParams(params))
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return

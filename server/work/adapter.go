@@ -8,7 +8,7 @@ import (
 	"github.com/Daskott/kronus/database"
 )
 
-const MAX_CONCURRENCY = 5
+const MAX_CONCURRENCY = 1
 
 type WorkerAdapter struct {
 	Pool WorkerPool

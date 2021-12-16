@@ -4,12 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/logger"
-	"gorm.io/driver/sqlite"
+	sqliteEncrypt "github.com/jackfr0st13/gorm-sqlite-cipher"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
 )
@@ -39,7 +41,7 @@ var db *gorm.DB
 
 func init() {
 	var err error
-	db, err = gorm.Open(sqlite.Open("test.db"), &gorm.Config{
+	db, err = gorm.Open(sqliteEncrypt.Open(dbDSN()), &gorm.Config{
 		Logger: gormLogger.New(
 			log.New(os.Stdout, "\r\n", log.LstdFlags),
 			gormLogger.Config{
@@ -50,7 +52,7 @@ func init() {
 		),
 	})
 	if err != nil {
-		panic("failed to connect database")
+		logg.Panicf("failed to connect database: %v", err)
 	}
 }
 
@@ -222,7 +224,7 @@ func FindRole(name string) (*Role, error) {
 func EmergencyContact(userID interface{}) (*Contact, error) {
 	contact := Contact{}
 
-	err := db.First(&contact, "user_id = ? AND is_emergency_contact = true", userID).Error
+	err := db.Where("user_id = ? AND is_emergency_contact = true", userID).First(&contact).Error
 	if err != nil {
 		return nil, err
 	}
@@ -460,17 +462,11 @@ func Save(value interface{}) error {
 
 func AutoMigrate() {
 	// Migrate the schema
-	db.AutoMigrate(&ProbeStatus{})
-	db.AutoMigrate(&JobStatus{})
-
-	db.AutoMigrate(&Job{})
-	db.AutoMigrate(&Role{})
-	db.AutoMigrate(&User{})
-
-	db.AutoMigrate(&Probe{})
-	db.AutoMigrate(&Contact{})
-	db.AutoMigrate(&ProbeSetting{})
-	db.AutoMigrate(&EmergencyProbe{})
+	db.AutoMigrate(
+		&ProbeStatus{}, &JobStatus{}, &Job{},
+		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
+		&User{}, &EmergencyProbe{},
+	)
 
 	//Insert seed data for ProbeStatus
 	if err := db.First(&ProbeStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
@@ -489,4 +485,23 @@ func AutoMigrate() {
 		logg.Info("Inserting seed data into 'Role'")
 		db.Create(&[]Role{{Name: "admin"}, {Name: "basic"}})
 	}
+}
+
+// ---------------------------------------------------------------------------------//
+// Helper functions
+// --------------------------------------------------------------------------------//
+
+func dbDSN() string {
+	key := url.QueryEscape("passphrase")
+	dbname := fmt.Sprintf("file:%v", dbFilePath())
+	return dbname + fmt.Sprintf("?_pragma_key=%s&_pragma_cipher_page_size=4096", key)
+}
+
+func dbFilePath() string {
+	configDir, err := os.Getwd()
+	if err != nil {
+		logg.Panic(err)
+	}
+
+	return filepath.Join(configDir, "database", "kronus-dev.db")
 }

@@ -21,7 +21,7 @@ func NewWorkerPool(concurrency int) *WorkerPool {
 	wp := WorkerPool{Handlers: make(map[string]Handler), concurrency: concurrency}
 
 	for i := 0; i < concurrency; i++ {
-		wp.workers = append(wp.workers, NewWorker())
+		wp.workers = append(wp.workers, NewWorker([]int64{0, 10, 100, 120}))
 	}
 
 	return &wp

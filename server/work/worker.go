@@ -39,13 +39,19 @@ type JobParams struct {
 type Handler func(map[string]interface{}) error
 
 type worker struct {
-	id       string
-	handlers map[string]Handler
-	stopChan chan struct{}
+	id                     string
+	handlers               map[string]Handler
+	stopChan               chan struct{}
+	sleepBackoffsInSeconds []int64
 }
 
-func NewWorker() *worker {
-	return &worker{id: makeIdentifier(), handlers: make(map[string]Handler), stopChan: make(chan struct{})}
+func NewWorker(sleepBackoffsInSeconds []int64) *worker {
+	return &worker{
+		id:                     makeIdentifier(),
+		handlers:               make(map[string]Handler),
+		stopChan:               make(chan struct{}),
+		sleepBackoffsInSeconds: sleepBackoffsInSeconds,
+	}
 }
 
 // RegisterHandler binds a name to a job handler.
@@ -73,7 +79,7 @@ func (w *worker) loop() {
 	var currentJob *database.Job
 	var err error
 
-	sleepBackoffsInSeconds := []int64{0, 10, 100, 300, 600, 900}
+	sleepBackoffs := w.sleepBackoffsInSeconds
 	rateLimiter := time.NewTicker(DefaultTickerDuration)
 	defer rateLimiter.Stop()
 
@@ -91,11 +97,11 @@ func (w *worker) loop() {
 					// using 'sleepBackoffsInSeconds'. To reduce db hit when it's not necessary.
 					consequtiveNoJobs++
 					idx := consequtiveNoJobs
-					if idx >= int64(len(sleepBackoffsInSeconds)) {
-						idx = int64(len(sleepBackoffsInSeconds)) - 1
+					if idx >= int64(len(sleepBackoffs)) {
+						idx = int64(len(sleepBackoffs)) - 1
 					}
-					w.logInfof("no job in queue - sleep for %v seconds", sleepBackoffsInSeconds[idx])
-					rateLimiter.Reset(time.Duration(sleepBackoffsInSeconds[idx]) * time.Second)
+					w.logInfof("no job in queue - sleep for %v seconds", sleepBackoffs[idx])
+					rateLimiter.Reset(time.Duration(sleepBackoffs[idx]) * time.Second)
 					continue
 				}
 
@@ -209,3 +215,7 @@ func (w *worker) logError(args ...interface{}) {
 //  * Set probe status to cancelled
 // - The Reaper: A background job that just runs every 30-60mins and unclaiming & requeue jobs
 // 		That are in a weird state i.e. in-progress & claimed but no work is being done
+// NOTE:
+// - In Sqlite updates are not atomic, hence you can have:
+// 	- Worker can(in some cases) pick up job that has already been claimed
+// 	Solution: Use just one worker, & reduce sleep backoffs when using sqlite
