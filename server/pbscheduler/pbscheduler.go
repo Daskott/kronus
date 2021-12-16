@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/cron"
 	"github.com/Daskott/kronus/server/logger"
@@ -301,6 +302,6 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 }
 
 func sendMessage(message string) error {
-	logg.Infof(message)
+	logg.Infof(fmt.Sprintf("%v %v", colors.Green("[message]"), message))
 	return nil
 }

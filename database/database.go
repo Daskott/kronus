@@ -494,7 +494,7 @@ func AutoMigrate() {
 func dbDSN() string {
 	key := url.QueryEscape("passphrase")
 	dbname := fmt.Sprintf("file:%v", dbFilePath())
-	return dbname + fmt.Sprintf("?_pragma_key=%s&_pragma_cipher_page_size=4096", key)
+	return dbname + fmt.Sprintf("?_pragma_key=%s&_pragma_cipher_page_size=4096&_journal_mode=WAL", key)
 }
 
 func dbFilePath() string {
