@@ -25,12 +25,21 @@ type DecodedJWT struct {
 }
 
 var (
+	probeScheduler *pbscheduler.ProbeScheduler
+
 	validate = validator.New()
 	logg     = logger.NewLogger()
 )
 
 func init() {
-	err := Registervalidators(validate)
+	var err error
+
+	err = Registervalidators(validate)
+	if err != nil {
+		logg.Panic(err)
+	}
+
+	probeScheduler, err = pbscheduler.NewProbeScheduler()
 	if err != nil {
 		logg.Panic(err)
 	}
@@ -64,7 +73,6 @@ func Start() {
 	database.AutoMigrate()
 
 	// Start liveliness probe job workers
-	probeScheduler := pbscheduler.NewProbeScheduler()
 	probeScheduler.StartWorkers()
 
 	// Start server

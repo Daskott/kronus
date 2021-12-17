@@ -70,13 +70,21 @@ func protectedRouteMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// client is only able to update/view their own record unless client is an admin
-		if vars["uid"] != "" && vars["uid"] != fmt.Sprint(decodedJWT.Claims.Subject) && !decodedJWT.Claims.IsAdmin {
+		if vars["uid"] != "" && !canAccessUserResource(r, decodedJWT.Claims) {
 			writeResponse(w, ResponsePayload{Errors: []string{"action is forbidden"}}, http.StatusForbidden)
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		currentUser, err := database.FindUserWithProbeSettiings(decodedJWT.Claims.Subject)
+		if err != nil {
+			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+			return
+		}
+
+		// Set current user in context
+		ctx := context.WithValue(r.Context(), RequestContextKey("currentUser"), currentUser)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -86,7 +94,7 @@ func adminRouteMiddleware(next http.Handler) http.Handler {
 
 		atLeastOneUserExists, err := database.AtLeastOneUserExists()
 		if err != nil {
-			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusUnauthorized)
+			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
 		}
 

@@ -44,12 +44,12 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 
 	atLeastOneUserExists, err := database.AtLeastOneUserExists()
 	if err != nil {
-		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusUnauthorized)
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	// if no auth token and there's no user, make the 1st user an admin
-	if r.Context().Value(RequestContextKey("jwt_claims")) == nil && !atLeastOneUserExists {
+	// if no user in db, make this user an admin
+	if !atLeastOneUserExists {
 		assignedRole = "admin"
 	}
 
@@ -101,6 +101,8 @@ func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
 
 func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
+
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*database.User)
 	data := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
 
@@ -136,7 +138,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = database.UpdateUser(r.Context().Value(RequestContextKey("requestUserID")), data)
+	err = database.UpdateUser(currentUser.ID, data)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -147,7 +149,8 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
-	userID := r.Context().Value(RequestContextKey("requestUserID"))
+
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*database.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
 
@@ -187,7 +190,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	// Only activate liveliness probe for users with emergency contact
 	if _, ok := params["active"].(bool); ok && params["active"] != nil && params["active"].(bool) {
-		contact, err := database.EmergencyContact(userID)
+		contact, err := database.EmergencyContact(currentUser.ID)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
@@ -200,10 +203,18 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = database.UpdateProbSettings(userID, probeSettingFieldsFromParams(params))
+	err = database.UpdateProbSettings(currentUser.ID, probeSettingFieldsFromParams(params))
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
+	}
+
+	if activateProbe, ok := params["active"].(bool); ok {
+		if activateProbe {
+			probeScheduler.AddCronJobForProbe(currentUser)
+		} else {
+			probeScheduler.RemoveCronJobForProbe(currentUser.ID)
+		}
 	}
 
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)

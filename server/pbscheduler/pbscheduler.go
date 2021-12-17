@@ -36,27 +36,40 @@ type ProbeScheduler struct {
 }
 
 // NewProbeScheduler creates new probe scheduler
-func NewProbeScheduler() *ProbeScheduler {
+func NewProbeScheduler() (*ProbeScheduler, error) {
 	probeScheduler := ProbeScheduler{
 		cronScheduler: cron.CronScheduler,
 		WorkerAdapter: work.NewWorkerAdapter(),
 	}
 
 	// Register worker handlers
-	probeScheduler.WorkerAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, sendLivelinessProbe)
-	probeScheduler.WorkerAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, sendFollowupForProbe)
-	probeScheduler.WorkerAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, sendEmergencyProbe)
+	err := probeScheduler.WorkerAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, sendLivelinessProbe)
+	if err != nil {
+		return nil, err
+	}
+	err = probeScheduler.WorkerAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, sendFollowupForProbe)
+	if err != nil {
+		return nil, err
+	}
+	err = probeScheduler.WorkerAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, sendEmergencyProbe)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create cron jobs
-	probeScheduler.setCronJobsForInitialProbes()
+	err = probeScheduler.setCronJobsForInitialProbes()
+	if err != nil {
+		return nil, err
+	}
+
 	probeScheduler.setCronJobsForFollowupProbes()
 
-	return &probeScheduler
+	return &probeScheduler, nil
 }
 
 // AddCronJobForProbe creates 'liveliness probe' cron jobs for user.
 // And when each cron is triggered, the job is sent to a job to be executed.
-func (pScheduler ProbeScheduler) AddCronJobForProbe(user database.User) {
+func (pScheduler ProbeScheduler) AddCronJobForProbe(user *database.User) {
 	pScheduler.cronScheduler.Cron(user.ProbeSettings.CronExpression).
 		Tag(probeName(user.ID)).
 		Do(
@@ -80,9 +93,10 @@ func (pScheduler ProbeScheduler) AddCronJobForProbe(user database.User) {
 		)
 }
 
-// RemoveCronJob removes cron job from scheduler
-func (pScheduler ProbeScheduler) RemoveCronJob(tag string) {
-	pScheduler.cronScheduler.RemoveByTag(tag)
+// RemoveCronJob removes probe cron job from scheduler & cancels any pending probe for user
+func (pScheduler ProbeScheduler) RemoveCronJobForProbe(userID interface{}) {
+	pScheduler.cronScheduler.RemoveByTag(probeName(userID))
+	database.CancelAllPendingProbes(userID)
 }
 
 // StartWorkers starts cron jobs and job workers
@@ -112,7 +126,7 @@ func (pScheduler ProbeScheduler) setCronJobsForInitialProbes() error {
 	}
 
 	for _, user := range users {
-		pScheduler.AddCronJobForProbe(user)
+		pScheduler.AddCronJobForProbe(&user)
 	}
 	logg.Infof("%v liveliness probe(s) cron scheduled", len(users))
 
@@ -202,6 +216,16 @@ func emergencyProbeName(userID interface{}) string {
 }
 
 func sendLivelinessProbe(params map[string]interface{}) error {
+	enabled, err := isProbeEnabled(params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	if !enabled {
+		logg.Infof("skipping liveliness probe for userID=%v, it's currently disabled", params["user_id"])
+		return nil
+	}
+
 	lastProbe, err := database.LastProbeForUser(params["user_id"])
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		logg.Error(err)
@@ -237,6 +261,16 @@ func sendLivelinessProbe(params map[string]interface{}) error {
 }
 
 func sendFollowupForProbe(params map[string]interface{}) error {
+	enabled, err := isProbeEnabled(params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	if !enabled {
+		logg.Infof("skipping followup probe for userID=%v, probe is currently disabled", params["user_id"])
+		return nil
+	}
+
 	user, err := database.FindUserBy("id", params["user_id"])
 	if err != nil {
 		return err
@@ -263,8 +297,18 @@ func sendFollowupForProbe(params map[string]interface{}) error {
 }
 
 func sendEmergencyProbe(params map[string]interface{}) error {
+	enabled, err := isProbeEnabled(params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	if !enabled {
+		logg.Infof("skipping emergency probe for userID=%v, probe is currently disabled", params["user_id"])
+		return nil
+	}
+
 	// Set user liveliness probe status to 'unavailable'
-	err := database.SetProbeStatus(params["probe_id"], "unavailable")
+	err = database.SetProbeStatus(params["probe_id"], "unavailable")
 	if err != nil {
 		return err
 	}
@@ -299,6 +343,15 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+func isProbeEnabled(userID interface{}) (bool, error) {
+	pbSettings, err := database.FindProbeSettings(userID)
+	if err != nil {
+		return false, nil
+	}
+
+	return pbSettings.Active, nil
 }
 
 func sendMessage(message string) error {

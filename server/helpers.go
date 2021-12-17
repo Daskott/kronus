@@ -10,6 +10,7 @@ import (
 	"github.com/Daskott/kronus/database"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/go-playground/validator"
+	"github.com/gorilla/mux"
 )
 
 // ---------------------------------------------------------------------------------//
@@ -139,4 +140,17 @@ func decodeAndVerifyAuthHeader(authHeaderValue string) DecodedJWT {
 	}
 
 	return DecodedJWT{Claims: tokenClaims}
+}
+
+// client is only able to update/view their own record unless client is an admin
+// who can GET/DELETE another user's record
+func canAccessUserResource(r *http.Request, userClaims *auth.KronusTokenClaims) bool {
+	hasAccess := false
+	allowedMethodsForAdmins := map[string]bool{"GET": true, "DELETE": true}
+
+	if mux.Vars(r)["uid"] == userClaims.Subject || (userClaims.IsAdmin && allowedMethodsForAdmins[r.Method]) {
+		hasAccess = true
+	}
+
+	return hasAccess
 }

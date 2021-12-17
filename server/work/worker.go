@@ -207,15 +207,3 @@ func (w *worker) logError(args ...interface{}) {
 	prefix := colors.Red((fmt.Sprintf("[worker %v] ", w.id)))
 	logg.Errorf(prefix, args...)
 }
-
-// TODO:
-// - Enque probe when activated via api
-// - When probe is turned off
-// 	* Remove 'liveliness probe' cron
-//  * Set probe status to cancelled
-// - The Reaper: A background job that just runs every 30-60mins and unclaiming & requeue jobs
-// 		That are in a weird state i.e. in-progress & claimed but no work is being done
-// NOTE:
-// - In Sqlite updates are not atomic, hence you can have:
-// 	- Worker can(in some cases) pick up job that has already been claimed
-// 	Solution: Use just one worker, & reduce sleep backoffs when using sqlite

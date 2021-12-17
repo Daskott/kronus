@@ -112,12 +112,11 @@ type ProbeSetting struct {
 
 type Probe struct {
 	BaseModel
-	Response        string
-	RetryCount      int
-	EmergencyProbe  EmergencyProbe
-	LocationLatLong string
-	UserID          uint `gorm:"not null"`
-	ProbeStatusID   uint
+	Response       string
+	RetryCount     int
+	EmergencyProbe EmergencyProbe
+	UserID         uint `gorm:"not null"`
+	ProbeStatusID  uint
 }
 
 type EmergencyProbe struct {
@@ -181,6 +180,16 @@ func FindUserBy(field string, value interface{}) (*User, error) {
 		"Email",
 		"RoleID",
 	).First(&user, fmt.Sprintf("%v = ?", field), value).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func FindUserWithProbeSettiings(userID interface{}) (*User, error) {
+	user := User{}
+	err := db.Preload("ProbeSettings").First(&user, userID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -320,6 +329,16 @@ func FindProbe(id interface{}) (*Probe, error) {
 	return &probe, nil
 }
 
+func FindProbeSettings(userID interface{}) (*ProbeSetting, error) {
+	probeSetting := ProbeSetting{}
+	err := db.First(&probeSetting, "user_id = ?", userID).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &probeSetting, nil
+}
+
 func CreateProbe(userID interface{}) error {
 	currentTime := time.Now()
 	pendingProbeStatus := ProbeStatus{}
@@ -456,6 +475,38 @@ func FindJobStatus(name string) (*JobStatus, error) {
 	return &jobStatus, nil
 }
 
+func CancelAllPendingProbes(userID interface{}) error {
+	probes := []Probe{}
+
+	// Fetch all pending probes for user
+	err := db.Joins(
+		"INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?", "pending").
+		Where("user_id = ?", userID).Find(&probes).Error
+
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	// If pending probes exist, set status for all of them to 'cancelled'
+	if len(probes) > 0 {
+		cancelledStatus := ProbeStatus{}
+		err := db.Where(&ProbeStatus{Name: "cancelled"}).Find(&cancelledStatus).Error
+		if err != nil {
+			return err
+		}
+
+		probeIDs := []uint{}
+		for _, probe := range probes {
+			probeIDs = append(probeIDs, probe.ID)
+		}
+
+		return db.Table("probes").
+			Where("id IN ?", probeIDs).Update("probe_status_id", cancelledStatus.ID).Error
+	}
+
+	return nil
+}
+
 func Save(value interface{}) error {
 	return db.Save(value).Error
 }
@@ -492,9 +543,9 @@ func AutoMigrate() {
 // --------------------------------------------------------------------------------//
 
 func dbDSN() string {
-	key := url.QueryEscape("passphrase")
-	dbname := fmt.Sprintf("file:%v", dbFilePath())
-	return dbname + fmt.Sprintf("?_pragma_key=%s&_pragma_cipher_page_size=4096&_journal_mode=WAL", key)
+	passPhrase := url.QueryEscape("passphrase")
+	dbName := fmt.Sprintf("file:%v", dbFilePath())
+	return dbName + fmt.Sprintf("?_pragma_key=%s&_pragma_cipher_page_size=4096&_journal_mode=WAL", passPhrase)
 }
 
 func dbFilePath() string {
