@@ -7,18 +7,12 @@ import (
 	"time"
 
 	"github.com/Daskott/kronus/colors"
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/logger"
 	"gorm.io/gorm"
 )
 
-const (
-	ENQUEUED_JOB    = "enqueued"
-	IN_PROGRESS_JOB = "in-progress"
-	SUCCESSFUL_JOB  = "successful"
-	DEAD_JOB        = "dead"
-	MAX_FAILS       = 4
-)
+const MAX_FAILS = 4
 
 var (
 	DefaultTickerDuration = 5 * time.Millisecond
@@ -76,7 +70,7 @@ func (w *worker) stop() {
 
 func (w *worker) loop() {
 	var consequtiveNoJobs int64
-	var currentJob *database.Job
+	var currentJob *models.Job
 	var err error
 
 	sleepBackoffs := w.sleepBackoffsInSeconds
@@ -90,7 +84,7 @@ func (w *worker) loop() {
 			logg.Infof("Stopping worker %s", w.id)
 			return
 		case <-rateLimiter.C:
-			currentJob, err = database.LastJob(ENQUEUED_JOB, false)
+			currentJob, err = models.LastJob(models.ENQUEUED_JOB, false)
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					// If no job found, slowly increase the wait time between each job fetch
@@ -110,7 +104,7 @@ func (w *worker) loop() {
 				continue
 			}
 
-			claimed, err := database.ClaimJob(currentJob.ID)
+			claimed, err := currentJob.MarkAsClaimed()
 			if err != nil {
 				w.logError(err)
 				rateLimiter.Reset(TickerDurationOnError)
@@ -131,7 +125,7 @@ func (w *worker) loop() {
 	}
 }
 
-func (w *worker) processJob(job *database.Job) {
+func (w *worker) processJob(job *models.Job) {
 	args := make(map[string]interface{})
 	err := json.Unmarshal([]byte(job.Args), &args)
 	if err != nil {
@@ -149,17 +143,17 @@ func (w *worker) processJob(job *database.Job) {
 	w.markJobAsSuccessful(job)
 }
 
-func (w *worker) determineFailedJobFate(job *database.Job, runError error) {
-	var jobStatus *database.JobStatus
+func (w *worker) determineFailedJobFate(job *models.Job, runError error) {
+	var jobStatus *models.JobStatus
 	var err error
 
 	job.Fails++
 
 	// For job with Fails >= MAX_FAILS mark as DEAD else requeue the job to be retried
 	if job.Fails >= MAX_FAILS {
-		jobStatus, err = database.FindJobStatus(DEAD_JOB)
+		jobStatus, err = models.FindJobStatus(models.DEAD_JOB)
 	} else {
-		jobStatus, err = database.FindJobStatus(ENQUEUED_JOB)
+		jobStatus, err = models.FindJobStatus(models.ENQUEUED_JOB)
 	}
 
 	if err != nil {
@@ -168,7 +162,7 @@ func (w *worker) determineFailedJobFate(job *database.Job, runError error) {
 	}
 
 	// Unclaim job and update it with the necessary fail information
-	err = database.UpdateJob(job.ID, map[string]interface{}{
+	err = job.Update(map[string]interface{}{
 		"claimed":       false,
 		"job_status_id": jobStatus.ID,
 		"fails":         job.Fails,
@@ -180,8 +174,8 @@ func (w *worker) determineFailedJobFate(job *database.Job, runError error) {
 	w.logInfof("job with id=%v completed with status=%v", job.ID, jobStatus.Name)
 }
 
-func (w *worker) markJobAsSuccessful(job *database.Job) {
-	jobStatus, err := database.FindJobStatus(SUCCESSFUL_JOB)
+func (w *worker) markJobAsSuccessful(job *models.Job) {
+	jobStatus, err := models.FindJobStatus(models.SUCCESSFUL_JOB)
 	if err != nil {
 		logg.Error(err)
 		return
@@ -191,7 +185,7 @@ func (w *worker) markJobAsSuccessful(job *database.Job) {
 	update["claimed"] = false
 	update["job_status_id"] = jobStatus.ID
 
-	err = database.UpdateJob(job.ID, update)
+	err = job.Update(update)
 	if err != nil {
 		w.logError(err)
 	}

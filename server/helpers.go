@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
@@ -41,9 +41,9 @@ func removeUnknownFields(args map[string]interface{}, validFields map[string]boo
 func probeSettingFieldsFromParams(params map[string]interface{}) map[string]interface{} {
 	newParams := make(map[string]interface{})
 
-	cronDay := database.DEFAULT_PROBE_CRON_DAY
-	cronHour := database.DEFAULT_PROBE_CRON_HOUR
-	cronMinute := database.DEFAULT_PROBE_CRON_MINUTE
+	cronDay := models.DEFAULT_PROBE_CRON_DAY
+	cronHour := models.DEFAULT_PROBE_CRON_HOUR
+	cronMinute := models.DEFAULT_PROBE_CRON_MINUTE
 	cronExpression := ""
 
 	// Extract time segments (if provided)
@@ -55,7 +55,7 @@ func probeSettingFieldsFromParams(params map[string]interface{}) map[string]inte
 
 	// Extract numeric value for day (if provided)
 	if params["day"] != nil {
-		cronDay = database.CRON_DAY_MAPPINGS[params["day"].(string)]
+		cronDay = models.CRON_DAY_MAPPINGS[params["day"].(string)]
 	}
 
 	// Set value of cron expression to be stored (if time or day is provided)
@@ -134,7 +134,7 @@ func decodeAndVerifyAuthHeader(authHeaderValue string) DecodedJWT {
 	}
 
 	// validate that the user account still exists
-	_, err = database.FindUserBy("id", tokenClaims.Subject)
+	_, err = models.FindUserBy("id", tokenClaims.Subject)
 	if err != nil {
 		return DecodedJWT{ErrorMsg: "invalid token provided"}
 	}

@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/pbscheduler"
@@ -70,7 +70,7 @@ func Start() {
 	router.HandleFunc("/login", logInHandler).Methods("POST")
 	router.Use(loggingMiddleware, initialContextMiddleware)
 
-	database.AutoMigrate()
+	models.AutoMigrate()
 
 	// Start liveliness probe job workers
 	probeScheduler.StartWorkers()

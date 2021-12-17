@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Daskott/kronus/colors"
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/cron"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/work"
@@ -17,8 +17,6 @@ import (
 )
 
 const (
-	PENDING_PROBE     = "pending"
-	UNAVAILABLE_PROBE = "unavailable"
 	MAX_PROBE_RETRIES = 3
 
 	SEND_LIVELINESS_PROBE_HANDLER = "send_liveliness_probe"
@@ -56,24 +54,16 @@ func NewProbeScheduler() (*ProbeScheduler, error) {
 		return nil, err
 	}
 
-	// Create cron jobs
-	err = probeScheduler.setCronJobsForInitialProbes()
-	if err != nil {
-		return nil, err
-	}
-
-	probeScheduler.setCronJobsForFollowupProbes()
-
 	return &probeScheduler, nil
 }
 
 // AddCronJobForProbe creates 'liveliness probe' cron jobs for user.
 // And when each cron is triggered, the job is sent to a job to be executed.
-func (pScheduler ProbeScheduler) AddCronJobForProbe(user *database.User) {
+func (pScheduler ProbeScheduler) AddCronJobForProbe(user models.User) {
 	pScheduler.cronScheduler.Cron(user.ProbeSettings.CronExpression).
 		Tag(probeName(user.ID)).
 		Do(
-			func() {
+			func(user models.User) {
 				// Enqueue liveliness probe job for user when cron job is triggered
 				err := pScheduler.WorkerAdapter.Perform(work.JobParams{
 					Name:    probeName(user.ID),
@@ -90,17 +80,26 @@ func (pScheduler ProbeScheduler) AddCronJobForProbe(user *database.User) {
 					logg.Error(err)
 				}
 			},
+			user,
 		)
 }
 
 // RemoveCronJob removes probe cron job from scheduler & cancels any pending probe for user
-func (pScheduler ProbeScheduler) RemoveCronJobForProbe(userID interface{}) {
-	pScheduler.cronScheduler.RemoveByTag(probeName(userID))
-	database.CancelAllPendingProbes(userID)
+func (pScheduler ProbeScheduler) RemoveCronJobForProbe(user *models.User) {
+	pScheduler.cronScheduler.RemoveByTag(probeName(user.ID))
+	user.CancelAllPendingProbes()
 }
 
-// StartWorkers starts cron jobs and job workers
+// StartWorkers adds probes to cron scheduler,
+// then starts the cron scheduler and job workers
 func (pScheduler ProbeScheduler) StartWorkers() {
+	err := pScheduler.setCronJobsForInitialProbes()
+	if err != nil {
+		logg.Panic(err)
+	}
+
+	pScheduler.setCronJobsForFollowupProbes()
+
 	// Start cron jobs that handle enqueuing of 'probe' jobs
 	pScheduler.cronScheduler.StartAsync()
 
@@ -120,13 +119,13 @@ func (pScheduler ProbeScheduler) StopWorkers() {
 // Creates 'liveliness probe' cron jobs for users with 'active' probe_settings.
 // And when each cron is triggered, the job is sent to a queue to be executed.
 func (pScheduler ProbeScheduler) setCronJobsForInitialProbes() error {
-	users, err := database.UsersWithActiveProbe()
+	users, err := models.UsersWithActiveProbe()
 	if err != nil {
 		return err
 	}
 
 	for _, user := range users {
-		pScheduler.AddCronJobForProbe(&user)
+		pScheduler.AddCronJobForProbe(user)
 	}
 	logg.Infof("%v liveliness probe(s) cron scheduled", len(users))
 
@@ -142,7 +141,7 @@ func (pScheduler ProbeScheduler) setCronJobsForFollowupProbes() {
 
 func (pScheduler ProbeScheduler) sendFollowUpsForProbes() {
 	noOfFollowupProbeJobsQueued := 0
-	probes, err := database.ProbesByStatus(PENDING_PROBE)
+	probes, err := models.ProbesByStatus(models.PENDING_PROBE)
 	if err != nil {
 		logg.Error(err)
 		return
@@ -226,20 +225,21 @@ func sendLivelinessProbe(params map[string]interface{}) error {
 		return nil
 	}
 
-	lastProbe, err := database.LastProbeForUser(params["user_id"])
+	lastProbe, err := models.LastProbeForUser(params["user_id"])
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		logg.Error(err)
 		return err
 	}
 
-	pendingProbeStatus, err := database.FindProbeStatus(PENDING_PROBE)
+	pendingProbeStatus, err := models.FindProbeStatus(models.PENDING_PROBE)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		logg.Error(err)
 		return err
 	}
 
 	if lastProbe != nil && lastProbe.ProbeStatusID == pendingProbeStatus.ID {
-		logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending", params["user_id"])
+		logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending probeID=%v",
+			params["user_id"], lastProbe.ID)
 		return nil
 	}
 
@@ -251,7 +251,7 @@ func sendLivelinessProbe(params map[string]interface{}) error {
 	}
 
 	// Create record of initial probe msg sent to usser in db
-	err = database.CreateProbe(params["user_id"])
+	err = models.CreateProbe(params["user_id"])
 	if err != nil {
 		logg.Error(err)
 		return err
@@ -271,12 +271,12 @@ func sendFollowupForProbe(params map[string]interface{}) error {
 		return nil
 	}
 
-	user, err := database.FindUserBy("id", params["user_id"])
+	user, err := models.FindUserBy("id", params["user_id"])
 	if err != nil {
 		return err
 	}
 
-	probe, err := database.FindProbe(params["probe_id"])
+	probe, err := models.FindProbe(params["probe_id"])
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func sendFollowupForProbe(params map[string]interface{}) error {
 	}
 
 	probe.RetryCount += 1
-	database.Save(&probe)
+	err = probe.Save()
 	if err != nil {
 		return err
 	}
@@ -308,17 +308,17 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 	}
 
 	// Set user liveliness probe status to 'unavailable'
-	err = database.SetProbeStatus(params["probe_id"], "unavailable")
+	err = models.SetProbeStatus(params["probe_id"], "unavailable")
 	if err != nil {
 		return err
 	}
 
-	emergencyContact, err := database.EmergencyContact(params["user_id"])
+	user, err := models.FindUserBy("id", params["user_id"])
 	if err != nil {
 		return err
 	}
 
-	user, err := database.FindUserBy("id", params["user_id"])
+	emergencyContact, err := user.EmergencyContact()
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 
 	// Record emregency probe sent out
 	// TODO: Retry, but in worst case scenario, it's okay to fail
-	err = database.CreateEmergencyProbe(params["probe_id"], emergencyContact.ID)
+	err = models.CreateEmergencyProbe(params["probe_id"], emergencyContact.ID)
 	if err != nil {
 		logg.Error(err)
 	}
@@ -346,7 +346,7 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 }
 
 func isProbeEnabled(userID interface{}) (bool, error) {
-	pbSettings, err := database.FindProbeSettings(userID)
+	pbSettings, err := models.FindProbeSettings(userID)
 	if err != nil {
 		return false, nil
 	}

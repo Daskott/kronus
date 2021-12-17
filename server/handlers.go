@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/golang-jwt/jwt"
@@ -26,7 +26,7 @@ type TokenPayload struct {
 }
 
 func createUserHandler(rw http.ResponseWriter, r *http.Request) {
-	user := database.User{}
+	user := models.User{}
 	decoder := json.NewDecoder(r.Body)
 	assignedRole := "basic"
 
@@ -42,7 +42,7 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	atLeastOneUserExists, err := database.AtLeastOneUserExists()
+	atLeastOneUserExists, err := models.AtLeastOneUserExists()
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -53,14 +53,14 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 		assignedRole = "admin"
 	}
 
-	role, err := database.FindRole(assignedRole)
+	role, err := models.FindRole(assignedRole)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 	user.RoleID = role.ID
 
-	err = database.CreateUser(&user)
+	err = models.CreateUser(&user)
 	if err != nil {
 		if strings.Contains(err.Error(), "Duplicate") {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
@@ -75,7 +75,7 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
-	user, err := database.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
+	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusNotFound)
 		return
@@ -90,7 +90,7 @@ func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
-	err := database.DeleteUser(r.Context().Value(RequestContextKey("requestUserID")))
+	err := models.DeleteUser(r.Context().Value(RequestContextKey("requestUserID")))
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -102,7 +102,7 @@ func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
 func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
-	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*database.User)
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	data := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
 
@@ -138,7 +138,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = database.UpdateUser(currentUser.ID, data)
+	err = models.UpdateUser(currentUser.ID, data)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -150,7 +150,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
-	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*database.User)
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
 
@@ -179,7 +179,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if params["day"] != nil && database.CRON_DAY_MAPPINGS[params["day"].(string)] == "" {
+	if params["day"] != nil && models.CRON_DAY_MAPPINGS[params["day"].(string)] == "" {
 		errs = append(errs, "valid 'day' field is required e.g. sun, mon, tue, wed, thu, fri or sat")
 	}
 
@@ -190,7 +190,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	// Only activate liveliness probe for users with emergency contact
 	if _, ok := params["active"].(bool); ok && params["active"] != nil && params["active"].(bool) {
-		contact, err := database.EmergencyContact(currentUser.ID)
+		contact, err := currentUser.EmergencyContact()
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
@@ -203,7 +203,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = database.UpdateProbSettings(currentUser.ID, probeSettingFieldsFromParams(params))
+	err = currentUser.UpdateProbSettings(probeSettingFieldsFromParams(params))
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -211,9 +211,9 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	if activateProbe, ok := params["active"].(bool); ok {
 		if activateProbe {
-			probeScheduler.AddCronJobForProbe(currentUser)
+			probeScheduler.AddCronJobForProbe(*currentUser)
 		} else {
-			probeScheduler.RemoveCronJobForProbe(currentUser.ID)
+			probeScheduler.RemoveCronJobForProbe(currentUser)
 		}
 	}
 
@@ -225,7 +225,7 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.Decode(&data)
 
-	passwordHash, err := database.FindUserPassword(data["email"])
+	passwordHash, err := models.FindUserPassword(data["email"])
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
 		return
@@ -237,13 +237,13 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// On success, find user record
-	user, err := database.FindUserBy("email", data["email"])
+	user, err := models.FindUserBy("email", data["email"])
 	if err != nil {
 		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
 		return
 	}
 
-	isAdmin, err := database.IsAdmin(user)
+	isAdmin, err := user.IsAdmin()
 	if err != nil {
 		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
 		return

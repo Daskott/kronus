@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/pkg/errors"
 )
 
@@ -55,11 +55,8 @@ func (wp *WorkerPool) Enqueue(job JobParams) error {
 		return err
 	}
 
-	if job.Unique {
-		err = database.CreateUniqueJobByName(job.Name, job.Handler, string(argsAsJson))
-	} else {
-		err = database.CreateJob(job.Name, job.Handler, string(argsAsJson))
-	}
+	// This ensures that all jobs currently in the queue or in-progress are unique
+	err = models.CreateUniqueJobByName(job.Name, job.Handler, string(argsAsJson))
 
 	if err != nil {
 		return err

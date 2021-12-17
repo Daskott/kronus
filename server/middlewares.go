@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Daskott/kronus/colors"
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 	"github.com/gorilla/mux"
 )
 
@@ -75,7 +75,7 @@ func protectedRouteMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		currentUser, err := database.FindUserWithProbeSettiings(decodedJWT.Claims.Subject)
+		currentUser, err := models.FindUserWithProbeSettiings(decodedJWT.Claims.Subject)
 		if err != nil {
 			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
@@ -92,7 +92,7 @@ func adminRouteMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		decodedJWT := r.Context().Value(RequestContextKey("decodedJWT")).(DecodedJWT)
 
-		atLeastOneUserExists, err := database.AtLeastOneUserExists()
+		atLeastOneUserExists, err := models.AtLeastOneUserExists()
 		if err != nil {
 			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return

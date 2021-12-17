@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Daskott/kronus/database"
+	"github.com/Daskott/kronus/models"
 )
 
 const MAX_CONCURRENCY = 1
@@ -45,7 +45,7 @@ func (adapter *WorkerAdapter) Perform(job JobParams) error {
 
 	err := adapter.Pool.Enqueue(job)
 	if err != nil {
-		if errors.Is(err, database.ErrDuplicateJob) {
+		if errors.Is(err, models.ErrDuplicateJob) {
 			logg.Warnf("Duplicate job already in queue for: %v", job)
 			return nil
 		}
