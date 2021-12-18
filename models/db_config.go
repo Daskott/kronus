@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 
 	"github.com/Daskott/kronus/server/logger"
+	"github.com/Daskott/kronus/utils"
 	sqliteEncrypt "github.com/jackfr0st13/gorm-sqlite-cipher"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
@@ -17,9 +17,30 @@ import (
 var logg = logger.NewLogger()
 var db *gorm.DB
 
-func init() {
+// AutoMigrate auo-migrate db schema and insert seed data
+func AutoMigrate(passPhrase string, dbRootDir string) error {
+	err := openDB(passPhrase, dbRootDir)
+	if err != nil {
+		return err
+	}
+
+	db.AutoMigrate(
+		&ProbeStatus{}, &JobStatus{}, &Job{},
+		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
+		&User{}, &EmergencyProbe{},
+	)
+
+	populateDBWithSeedData()
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------------//
+// Helper functions
+// --------------------------------------------------------------------------------//
+func openDB(passPhrase string, dbRootDir string) error {
 	var err error
-	db, err = gorm.Open(sqliteEncrypt.Open(dbDSN()), &gorm.Config{
+	db, err = gorm.Open(sqliteEncrypt.Open(dbDSN(passPhrase, dbRootDir)), &gorm.Config{
 		Logger: gormLogger.New(
 			log.New(os.Stdout, "\r\n", log.LstdFlags),
 			gormLogger.Config{
@@ -30,24 +51,11 @@ func init() {
 		),
 	})
 	if err != nil {
-		logg.Panicf("failed to connect database: %v", err)
+		return fmt.Errorf("failed to connect database: %v", err)
 	}
+
+	return nil
 }
-
-// AutoMigrate auo-migrate db schema and insert seed data
-func AutoMigrate() {
-	db.AutoMigrate(
-		&ProbeStatus{}, &JobStatus{}, &Job{},
-		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
-		&User{}, &EmergencyProbe{},
-	)
-
-	populateDBWithSeedData()
-}
-
-// ---------------------------------------------------------------------------------//
-// Helper functions
-// --------------------------------------------------------------------------------//
 
 func populateDBWithSeedData() {
 	if err := db.First(&ProbeStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
@@ -66,17 +74,29 @@ func populateDBWithSeedData() {
 	}
 }
 
-func dbDSN() string {
-	passPhrase := url.QueryEscape("passphrase")
-	dbName := fmt.Sprintf("file:%v", dbFilePath())
-	return dbName + fmt.Sprintf("?_pragma_key=%s&_pragma_cipher_page_size=4096&_journal_mode=WAL", passPhrase)
-}
-
-func dbFilePath() string {
-	configDir, err := os.Getwd()
+func dbDSN(passPhrase string, dbRootDir string) string {
+	dbDir, err := dbDirectory(dbRootDir)
 	if err != nil {
 		logg.Panic(err)
 	}
 
-	return filepath.Join(configDir, "kronus-dev.db")
+	dbFilePath := filepath.Join(dbDir, "kronus.db")
+	dbName := fmt.Sprintf("file:%v", dbFilePath)
+
+	return fmt.Sprintf(
+		"%v?_pragma_key=%s&_pragma_cipher_page_size=4096&_journal_mode=WAL",
+		dbName,
+		passPhrase,
+	)
+}
+
+func dbDirectory(dbRootDir string) (string, error) {
+	dbDir := filepath.Join(dbRootDir, "db")
+
+	err := utils.CreateDirIfNotExist(dbDir)
+	if err != nil {
+		return "", err
+	}
+
+	return dbDir, nil
 }

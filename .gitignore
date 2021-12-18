@@ -15,13 +15,9 @@ todo.md
 
 .kronus.dev.yaml
 
-private_key_dev.pem
 
 # Sqlite files in dev env
-kronus-dev.db
-kronus-dev.db-journal
-kronus-dev.db-shm
-kronus-dev.db-wal
+dev/db/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

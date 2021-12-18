@@ -3,7 +3,6 @@ package key
 import (
 	"crypto/rsa"
 	"fmt"
-	"io/ioutil"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/lestrrat-go/jwx/jwk"
@@ -19,14 +18,8 @@ type KeyPair struct {
 	PublicKey  *rsa.PublicKey
 }
 
-func NewKeyPairFromRSAPrivateKeyPem(filePath string) (*KeyPair, error) {
-	// TODO: Accept raw bytes/string instead of file path
-	privateKeyBytes, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateKeyBytes)
+func NewKeyPairFromRSAPrivateKeyPem(rawKeyPem string) (*KeyPair, error) {
+	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(rawKeyPem))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse RSA private key: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
+
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 )
@@ -259,7 +260,7 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 			Issuer:    "kronus",
 			Subject:   fmt.Sprint(user.ID),
 		},
-	})
+	}, authKeyPair)
 
 	if err != nil {
 		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
@@ -270,7 +271,7 @@ func logInHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func jwksHandler(rw http.ResponseWriter, r *http.Request) {
-	jwk, err := auth.KeyPair.JWK()
+	jwk, err := authKeyPair.JWK()
 	if err != nil {
 		writeResponse(rw, (ResponsePayload{Errors: []string{err.Error()}}), http.StatusInternalServerError)
 		return

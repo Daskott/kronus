@@ -1,14 +1,20 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
+	"github.com/Daskott/kronus/server/pbscheduler"
+	"github.com/Daskott/kronus/utils"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
 )
@@ -128,7 +134,7 @@ func decodeAndVerifyAuthHeader(authHeaderValue string) DecodedJWT {
 		return DecodedJWT{ErrorMsg: "no token provided"}
 	}
 
-	tokenClaims, err := auth.DecodeJWT(authHeaderList[1])
+	tokenClaims, err := auth.DecodeJWT(authHeaderList[1], authKeyPair)
 	if err != nil {
 		return DecodedJWT{ErrorMsg: "invalid token provided"}
 	}
@@ -153,4 +159,61 @@ func canAccessUserResource(r *http.Request, userClaims *auth.KronusTokenClaims) 
 	}
 
 	return hasAccess
+}
+
+// ---------------------------------------------------------------------------------//
+// Server Helper functions
+// --------------------------------------------------------------------------------//
+
+func serve(server *http.Server) {
+	logg.Infof("Kronus server is listening on port:%v", server.Addr)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logg.Fatal(err)
+
+	}
+}
+
+func cleanup(probeScheduler *pbscheduler.ProbeScheduler, server *http.Server) {
+	// Stop liveliness probe job workers
+	probeScheduler.StopWorkers()
+
+	// Shutdown server gracefully
+	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctxShutDown); err != nil {
+		logg.Fatalf("Kronus server shutdown failed:%+s", err)
+	}
+
+	logg.Infof("Kronus server stopped properly")
+}
+
+func configDirectory(devMode bool) string {
+	var configFolderName string
+
+	// Use dev folder in project directory for dev
+	if devMode {
+		configFolderName = "dev"
+		projectDir, err := os.Getwd()
+		panicOnError(err)
+
+		return filepath.Join(projectDir, configFolderName)
+	}
+
+	// Use kronus folder in home directory for prod
+	configFolderName = "kronus"
+	homeDir, err := os.UserHomeDir()
+	panicOnError(err)
+
+	configDir := filepath.Join(homeDir, configFolderName)
+
+	err = utils.CreateDirIfNotExist(configDir)
+	panicOnError(err)
+
+	return configDir
+}
+
+func panicOnError(err error) {
+	if err != nil {
+		logg.Panic(err)
+	}
 }

@@ -1,20 +1,20 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
+	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 )
 
 type RequestContextKey string
@@ -26,6 +26,7 @@ type DecodedJWT struct {
 
 var (
 	probeScheduler *pbscheduler.ProbeScheduler
+	authKeyPair    *key.KeyPair
 
 	validate = validator.New()
 	logg     = logger.NewLogger()
@@ -35,24 +36,30 @@ func init() {
 	var err error
 
 	err = Registervalidators(validate)
-	if err != nil {
-		logg.Panic(err)
-	}
+	panicOnError(err)
 
 	probeScheduler, err = pbscheduler.NewProbeScheduler()
-	if err != nil {
-		logg.Panic(err)
-	}
+	panicOnError(err)
 }
 
-func Start() {
-	port := 3000
+func Start(config *viper.Viper, devMode bool) {
+	var configDir string
+	var err error
+
 	router := mux.NewRouter()
 	protectedRouter := router.NewRoute().Subrouter()
 	adminRouter := router.NewRoute().Subrouter()
 
+	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
+	panicOnError(err)
+
+	configDir = configDirectory(devMode)
+
+	err = models.AutoMigrate(config.GetString("sqlite.passPhrase"), configDir)
+	panicOnError(err)
+
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%v", port),
+		Addr:    fmt.Sprintf(":%v", config.GetString("kronus.listener.port")),
 		Handler: router,
 	}
 
@@ -70,8 +77,6 @@ func Start() {
 	router.HandleFunc("/login", logInHandler).Methods("POST")
 	router.Use(loggingMiddleware, initialContextMiddleware)
 
-	models.AutoMigrate()
-
 	// Start liveliness probe job workers
 	probeScheduler.StartWorkers()
 
@@ -85,26 +90,4 @@ func Start() {
 
 	// Shutdown gracefully
 	cleanup(probeScheduler, server)
-}
-
-func serve(server *http.Server) {
-	logg.Infof("Kronus server is listening on port:%v", server.Addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logg.Fatal(err)
-
-	}
-}
-
-func cleanup(probeScheduler *pbscheduler.ProbeScheduler, server *http.Server) {
-	// Stop liveliness probe job workers
-	probeScheduler.StopWorkers()
-
-	// Shutdown server gracefully
-	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctxShutDown); err != nil {
-		logg.Fatalf("Kronus server shutdown failed:%+s", err)
-	}
-
-	logg.Infof("Kronus server stopped properly")
 }

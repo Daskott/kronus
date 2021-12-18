@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/golang-jwt/jwt"
@@ -16,16 +15,6 @@ type KronusTokenClaims struct {
 	jwt.StandardClaims
 }
 
-var KeyPair *key.KeyPair
-
-func init() {
-	var err error
-	KeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem("private_key_dev.pem")
-	if err != nil {
-		log.Fatalf("unable to initialize keyPair: %v", err)
-	}
-}
-
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err
@@ -36,10 +25,10 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func EncodeJWT(claims KronusTokenClaims) (string, error) {
+func EncodeJWT(claims KronusTokenClaims, keyPair *key.KeyPair) (string, error) {
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("RS256"), claims)
 
-	tokenString, err := token.SignedString(KeyPair.PrivateKey)
+	tokenString, err := token.SignedString(keyPair.PrivateKey)
 	if err != nil {
 		return "", err
 	}
@@ -47,14 +36,14 @@ func EncodeJWT(claims KronusTokenClaims) (string, error) {
 	return tokenString, nil
 }
 
-func DecodeJWT(tokenString string) (*KronusTokenClaims, error) {
+func DecodeJWT(tokenString string, keyPair *key.KeyPair) (*KronusTokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &KronusTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// validate the alg is what you expect:
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return KeyPair.PublicKey, nil
+		return keyPair.PublicKey, nil
 	})
 
 	if err != nil || !token.Valid {
