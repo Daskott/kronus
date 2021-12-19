@@ -11,6 +11,7 @@ import (
 	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
+	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
@@ -29,7 +30,7 @@ type TokenPayload struct {
 func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	user := models.User{}
 	decoder := json.NewDecoder(r.Body)
-	assignedRole := "basic"
+	assignedRole := models.BASIC_USER_ROLE
 
 	err := decoder.Decode(&user)
 	if err != nil {
@@ -51,7 +52,7 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 
 	// if no user in db, make this user an admin
 	if !atLeastOneUserExists {
-		assignedRole = "admin"
+		assignedRole = models.ADMIN_USER_ROLE
 	}
 
 	role, err := models.FindRole(assignedRole)
@@ -61,6 +62,7 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 	user.RoleID = role.ID
 
+	// TODO: Handle constraint errors properly
 	err = models.CreateUser(&user)
 	if err != nil {
 		if strings.Contains(err.Error(), "Duplicate") {
@@ -104,17 +106,22 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
-	data := make(map[string]interface{})
+	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
 
-	err := decoder.Decode(&data)
+	err := decoder.Decode(&params)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	removeUnknownFields(data, map[string]bool{"first_name": true, "last_name": true, "phone_number": true, "password": true})
-	if len(data) <= 0 {
+	removeUnknownFields(params, map[string]bool{
+		"first_name":   true,
+		"last_name":    true,
+		"phone_number": true,
+		"password":     true,
+	})
+	if len(params) <= 0 {
 		writeResponse(rw,
 			ResponsePayload{Errors: []string{"valid fields required"}},
 			http.StatusBadRequest,
@@ -122,14 +129,22 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if data["password"] != nil {
-		if err := validate.Var(data["password"], "password"); err != nil {
+	if params["first_name"] != nil && len(strings.TrimSpace(params["first_name"].(string))) <= 0 {
+		errs = append(errs, "valid first_name is required")
+	}
+
+	if params["last_name"] != nil && len(strings.TrimSpace(params["last_name"].(string))) <= 0 {
+		errs = append(errs, "valid last_name is required")
+	}
+
+	if params["password"] != nil {
+		if err := validate.Var(params["password"], "password"); err != nil {
 			errs = append(errs, "valid password is required")
 		}
 	}
 
-	if data["phone_number"] != nil {
-		if err := validate.Var(data["phone_number"], "e164"); err != nil {
+	if params["phone_number"] != nil {
+		if err := validate.Var(params["phone_number"], "e164"); err != nil {
 			errs = append(errs, "valid phone_number is required")
 		}
 	}
@@ -139,8 +154,8 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = models.UpdateUser(currentUser.ID, data)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	err = currentUser.Update(params)
+	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
@@ -171,7 +186,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
-		errs = append(errs, "active must be boolean e.g. true/false")
+		errs = append(errs, "active must be a boolean e.g. true/false")
 	}
 
 	if params["time"] != nil {
@@ -205,7 +220,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	err = currentUser.UpdateProbSettings(probeSettingFieldsFromParams(params))
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
@@ -216,6 +231,113 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		} else {
 			probeScheduler.RemoveCronJobForProbe(currentUser)
 		}
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+}
+
+func createContactHandler(rw http.ResponseWriter, r *http.Request) {
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
+	contact := models.Contact{}
+	decoder := json.NewDecoder(r.Body)
+
+	err := decoder.Decode(&contact)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	errs := validate.Struct(contact)
+	if errs != nil {
+		writeResponse(rw, ResponsePayload{Errors: strings.Split(errs.Error(), "\n")}, http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Handle duplicate error properly i.e return 400 instead of 500
+	err = currentUser.AddContact(&contact)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+}
+
+func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
+	var errs []string
+
+	vars := mux.Vars(r)
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
+	params := make(map[string]interface{})
+	decoder := json.NewDecoder(r.Body)
+
+	err := decoder.Decode(&params)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	removeUnknownFields(params, map[string]bool{
+		"first_name":           true,
+		"last_name":            true,
+		"phone_number":         true,
+		"email":                true,
+		"is_emergency_contact": true,
+	})
+	if len(params) <= 0 {
+		writeResponse(rw,
+			ResponsePayload{Errors: []string{"valid fields required"}},
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	if params["first_name"] != nil && len(strings.TrimSpace(params["first_name"].(string))) <= 0 {
+		errs = append(errs, "valid first_name is required")
+	}
+
+	if params["last_name"] != nil && len(strings.TrimSpace(params["last_name"].(string))) <= 0 {
+		errs = append(errs, "valid last_name is required")
+	}
+
+	if params["phone_number"] != nil {
+		if err := validate.Var(params["phone_number"], "required,e164"); err != nil {
+			errs = append(errs, "valid phone_number is required")
+		}
+	}
+
+	if params["email"] != nil {
+		if err := validate.Var(params["email"], "required,email"); err != nil {
+			errs = append(errs, "valid email is required")
+		}
+	}
+
+	if _, ok := params["is_emergency_contact"].(bool); params["is_emergency_contact"] != nil && !ok {
+		errs = append(errs, "is_emergency_contact must be a oolean e.g. true/false")
+	}
+
+	if len(errs) > 0 {
+		writeResponse(rw, ResponsePayload{Errors: errs}, http.StatusBadRequest)
+		return
+	}
+
+	err = currentUser.UpdateContact(vars["id"], params)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+}
+
+func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
+	vars := mux.Vars(r)
+
+	err := currentUser.DeleteContact(vars["id"])
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
 	}
 
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)

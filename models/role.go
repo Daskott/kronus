@@ -1,5 +1,10 @@
 package models
 
+const (
+	ADMIN_USER_ROLE = "admin"
+	BASIC_USER_ROLE = "basic"
+)
+
 type Role struct {
 	BaseModel
 	Name  string `json:"name"`

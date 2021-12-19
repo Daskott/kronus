@@ -71,6 +71,18 @@ func (user *User) CancelAllPendingProbes() error {
 	return nil
 }
 
+func (user *User) Update(data map[string]interface{}) error {
+	if data["password"] != nil {
+		passwordHash, err := auth.HashPassword(data["password"].(string))
+		if err != nil {
+			return err
+		}
+		data["password"] = passwordHash
+	}
+
+	return db.Model(&User{}).Where("id = ?", user.ID).Select(updatableFields).Updates(data).Error
+}
+
 func (user *User) UpdateProbSettings(data map[string]interface{}) error {
 	return db.Model(&ProbeSetting{}).Where("user_id = ? ", user.ID).Updates(data).Error
 }
@@ -86,6 +98,19 @@ func (user *User) IsAdmin() (bool, error) {
 	}
 
 	return adminRole.ID == user.RoleID, nil
+}
+
+func (user *User) AddContact(contact *Contact) error {
+	contact.UserID = user.ID
+	return db.Create(contact).Error
+}
+
+func (user *User) UpdateContact(contactID string, data map[string]interface{}) error {
+	return db.Table("contacts").Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
+}
+
+func (user *User) DeleteContact(id interface{}) error {
+	return db.Where("user_id = ?", user.ID).Delete(&Contact{}, id).Error
 }
 
 func (user *User) EmergencyContact() (*Contact, error) {
@@ -158,18 +183,6 @@ func CreateUser(user *User) error {
 
 	user.ProbeSettings = &ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
 	return db.Create(user).Error
-}
-
-func UpdateUser(id interface{}, data map[string]interface{}) error {
-	if data["password"] != nil {
-		passwordHash, err := auth.HashPassword(data["password"].(string))
-		if err != nil {
-			return err
-		}
-		data["password"] = passwordHash
-	}
-
-	return db.Model(&User{}).Where("id = ?", id).Select(updatableFields).Updates(data).Error
 }
 
 func DeleteUser(id interface{}) error {

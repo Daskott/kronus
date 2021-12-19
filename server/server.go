@@ -32,16 +32,6 @@ var (
 	logg     = logger.NewLogger()
 )
 
-func init() {
-	var err error
-
-	err = Registervalidators(validate)
-	fatalOnError(err)
-
-	probeScheduler, err = pbscheduler.NewProbeScheduler()
-	fatalOnError(err)
-}
-
 func Start(config *viper.Viper, devMode bool) {
 	var configDir string
 	var err error
@@ -49,6 +39,12 @@ func Start(config *viper.Viper, devMode bool) {
 	router := mux.NewRouter()
 	protectedRouter := router.NewRoute().Subrouter()
 	adminRouter := router.NewRoute().Subrouter()
+
+	err = Registervalidators(validate)
+	fatalOnError(err)
+
+	probeScheduler, err = pbscheduler.NewProbeScheduler(config.GetString("kronus.cron.timeZone"))
+	fatalOnError(err)
 
 	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
 	fatalOnError(err)
@@ -66,7 +62,12 @@ func Start(config *viper.Viper, devMode bool) {
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}", findUserHandler).Methods("GET")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}", updateUserHandler).Methods("PUT")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}", deleteUserHandler).Methods("DELETE")
+
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/probe_settings", updateProbeSettingsHandler).Methods("PUT")
+
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts", createContactHandler).Methods("POST")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts/{id:[0-9]+}", updateContactHandler).Methods("PUT")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts/{id:[0-9]+}", deleteUserContactHandler).Methods("DELETE")
 	protectedRouter.Use(protectedRouteMiddleware)
 
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")

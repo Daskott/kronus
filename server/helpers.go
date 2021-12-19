@@ -149,16 +149,28 @@ func decodeAndVerifyAuthHeader(authHeaderValue string) DecodedJWT {
 }
 
 // client is only able to update/view their own record unless client is an admin
-// who can GET/DELETE another user's record
+// who can GET/DELETE certain user resources
 func canAccessUserResource(r *http.Request, userClaims *auth.KronusTokenClaims) bool {
-	hasAccess := false
 	allowedMethodsForAdmins := map[string]bool{"GET": true, "DELETE": true}
+	deniedPathsForAdmin := []string{"/contacts"}
 
-	if mux.Vars(r)["uid"] == userClaims.Subject || (userClaims.IsAdmin && allowedMethodsForAdmins[r.Method]) {
-		hasAccess = true
+	if mux.Vars(r)["uid"] == userClaims.Subject {
+		return true
 	}
 
-	return hasAccess
+	if userClaims.IsAdmin {
+		if !allowedMethodsForAdmins[r.Method] {
+			return false
+		}
+
+		for _, deniedPath := range deniedPathsForAdmin {
+			if strings.Contains(r.URL.Path, deniedPath) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 // ---------------------------------------------------------------------------------//

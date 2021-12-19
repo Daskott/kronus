@@ -34,9 +34,9 @@ type ProbeScheduler struct {
 }
 
 // NewProbeScheduler creates new probe scheduler
-func NewProbeScheduler() (*ProbeScheduler, error) {
+func NewProbeScheduler(timeZone string) (*ProbeScheduler, error) {
 	probeScheduler := ProbeScheduler{
-		cronScheduler: cron.CronScheduler,
+		cronScheduler: cron.NewCronScheduler(timeZone),
 		WorkerAdapter: work.NewWorkerAdapter(),
 	}
 

@@ -7,14 +7,15 @@ import (
 	"github.com/go-co-op/gocron"
 )
 
-var CronScheduler *gocron.Scheduler
-
-func init() {
-	timeZone, err := time.LoadLocation("America/Toronto") // TODO: Read from config
+func NewCronScheduler(timeZoneArg string) *gocron.Scheduler {
+	timeZone, err := time.LoadLocation(timeZoneArg)
 	if err != nil {
-		log.Printf("warning: %v", err)
+		log.Printf("warning: %v, falling back to UTC", err)
 		timeZone = time.UTC
 	}
-	CronScheduler = gocron.NewScheduler(timeZone)
-	CronScheduler.TagsUnique()
+
+	cronScheduler := gocron.NewScheduler(timeZone)
+	cronScheduler.TagsUnique()
+
+	return cronScheduler
 }
