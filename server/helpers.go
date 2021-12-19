@@ -158,15 +158,17 @@ func canAccessUserResource(r *http.Request, userClaims *auth.KronusTokenClaims) 
 		return true
 	}
 
-	if userClaims.IsAdmin {
-		if !allowedMethodsForAdmins[r.Method] {
-			return false
-		}
+	if !userClaims.IsAdmin {
+		return false
+	}
 
-		for _, deniedPath := range deniedPathsForAdmin {
-			if strings.Contains(r.URL.Path, deniedPath) {
-				return false
-			}
+	if !allowedMethodsForAdmins[r.Method] {
+		return false
+	}
+
+	for _, deniedPath := range deniedPathsForAdmin {
+		if strings.Contains(r.URL.Path, deniedPath) {
+			return false
 		}
 	}
 
