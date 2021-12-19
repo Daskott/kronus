@@ -187,6 +187,8 @@ func cleanup(probeScheduler *pbscheduler.ProbeScheduler, server *http.Server) {
 	logg.Infof("Kronus server stopped properly")
 }
 
+// configDirectory retrieves the directory to store kronus configs
+// Or logs an error message and then calls os.Exit if it's unable to.
 func configDirectory(devMode bool) string {
 	var configFolderName string
 
@@ -194,7 +196,7 @@ func configDirectory(devMode bool) string {
 	if devMode {
 		configFolderName = "dev"
 		projectDir, err := os.Getwd()
-		panicOnError(err)
+		fatalOnError(err)
 
 		return filepath.Join(projectDir, configFolderName)
 	}
@@ -202,18 +204,18 @@ func configDirectory(devMode bool) string {
 	// Use kronus folder in home directory for prod
 	configFolderName = "kronus"
 	homeDir, err := os.UserHomeDir()
-	panicOnError(err)
+	fatalOnError(err)
 
 	configDir := filepath.Join(homeDir, configFolderName)
 
 	err = utils.CreateDirIfNotExist(configDir)
-	panicOnError(err)
+	fatalOnError(err)
 
 	return configDir
 }
 
-func panicOnError(err error) {
+func fatalOnError(err error) {
 	if err != nil {
-		logg.Panic(err)
+		logg.Fatal(err)
 	}
 }

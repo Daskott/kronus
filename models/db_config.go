@@ -40,7 +40,14 @@ func AutoMigrate(passPhrase string, dbRootDir string) error {
 // --------------------------------------------------------------------------------//
 func openDB(passPhrase string, dbRootDir string) error {
 	var err error
-	db, err = gorm.Open(sqliteEncrypt.Open(dbDSN(passPhrase, dbRootDir)), &gorm.Config{
+	var dbDSNVal string
+
+	dbDSNVal, err = dbDSN(passPhrase, dbRootDir)
+	if err != nil {
+		return fmt.Errorf("failed to set sqlite DSN: %v", err)
+	}
+
+	db, err = gorm.Open(sqliteEncrypt.Open(dbDSNVal), &gorm.Config{
 		Logger: gormLogger.New(
 			log.New(os.Stdout, "\r\n", log.LstdFlags),
 			gormLogger.Config{
@@ -74,10 +81,10 @@ func populateDBWithSeedData() {
 	}
 }
 
-func dbDSN(passPhrase string, dbRootDir string) string {
+func dbDSN(passPhrase string, dbRootDir string) (string, error) {
 	dbDir, err := dbDirectory(dbRootDir)
 	if err != nil {
-		logg.Panic(err)
+		return "", err
 	}
 
 	dbFilePath := filepath.Join(dbDir, "kronus.db")
@@ -87,7 +94,7 @@ func dbDSN(passPhrase string, dbRootDir string) string {
 		"%v?_pragma_key=%s&_pragma_cipher_page_size=4096&_journal_mode=WAL",
 		dbName,
 		passPhrase,
-	)
+	), nil
 }
 
 func dbDirectory(dbRootDir string) (string, error) {

@@ -36,10 +36,10 @@ func init() {
 	var err error
 
 	err = Registervalidators(validate)
-	panicOnError(err)
+	fatalOnError(err)
 
 	probeScheduler, err = pbscheduler.NewProbeScheduler()
-	panicOnError(err)
+	fatalOnError(err)
 }
 
 func Start(config *viper.Viper, devMode bool) {
@@ -51,12 +51,12 @@ func Start(config *viper.Viper, devMode bool) {
 	adminRouter := router.NewRoute().Subrouter()
 
 	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
-	panicOnError(err)
+	fatalOnError(err)
 
 	configDir = configDirectory(devMode)
 
 	err = models.AutoMigrate(config.GetString("sqlite.passPhrase"), configDir)
-	panicOnError(err)
+	fatalOnError(err)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%v", config.GetString("kronus.listener.port")),
