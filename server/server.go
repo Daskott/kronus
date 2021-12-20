@@ -10,6 +10,7 @@ import (
 	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
+	"github.com/Daskott/kronus/server/gstorage"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
@@ -29,14 +30,18 @@ var (
 	probeScheduler *pbscheduler.ProbeScheduler
 	workerPool     *work.WorkerPoolAdapter
 	authKeyPair    *key.KeyPair
+	storage        *gstorage.GStorage
+	config         *viper.Viper
+	configDir      string
 
 	validate = validator.New()
 	logg     = logger.NewLogger()
 )
 
-func Start(config *viper.Viper, devMode bool) {
-	var configDir string
+func Start(configArg *viper.Viper, devMode bool) {
 	var err error
+
+	config = configArg
 
 	err = RegisterValidators(validate)
 	fatalOnError(err)
@@ -45,6 +50,14 @@ func Start(config *viper.Viper, devMode bool) {
 
 	err = models.AutoMigrate(config.GetString("sqlite.passPhrase"), configDir)
 	fatalOnError(err)
+
+	if config.GetBool("google.storage.enableSQliteDbBackupAndSync") {
+		storage, err = gstorage.NewGStorage(
+			config.GetString("google.applicationCredentials"),
+			config.GetString("google.storage.prefix"),
+		)
+		fatalOnError(err)
+	}
 
 	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
 	fatalOnError(err)

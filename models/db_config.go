@@ -14,6 +14,8 @@ import (
 	gormLogger "gorm.io/gorm/logger"
 )
 
+const DB_NAME = "kronus.db"
+
 var logg = logger.NewLogger()
 var db *gorm.DB
 
@@ -41,6 +43,8 @@ func AutoMigrate(passPhrase string, dbRootDir string) error {
 func openDB(passPhrase string, dbRootDir string) error {
 	var err error
 	var dbDSNVal string
+
+	// TODO: pull db from google storage if it exist, before db starts
 
 	dbDSNVal, err = dbDSN(passPhrase, dbRootDir)
 	if err != nil {
@@ -87,7 +91,7 @@ func dbDSN(passPhrase string, dbRootDir string) (string, error) {
 		return "", err
 	}
 
-	dbFilePath := filepath.Join(dbDir, "kronus.db")
+	dbFilePath := filepath.Join(dbDir, DB_NAME)
 	dbName := fmt.Sprintf("file:%v", dbFilePath)
 
 	return fmt.Sprintf(

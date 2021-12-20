@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -16,9 +17,10 @@ var ErrObjectNotExist = storage.ErrObjectNotExist
 
 type GStorage struct {
 	storageClient *storage.Client
+	objectsPrefix string
 }
 
-func NewGStorage(credentialsFilePath string) (*GStorage, error) {
+func NewGStorage(credentialsFilePath, objectsPrefix string) (*GStorage, error) {
 	var client *storage.Client
 	var err error
 
@@ -32,11 +34,17 @@ func NewGStorage(credentialsFilePath string) (*GStorage, error) {
 		return nil, fmt.Errorf("NewGStorage: %v", err)
 	}
 
-	return &GStorage{storageClient: client}, nil
+	// Add slash to 'objectsPrefix' if non, to act as folder in gstorage
+	if !strings.HasSuffix(objectsPrefix, "/") {
+		objectsPrefix += "/"
+	}
+
+	return &GStorage{storageClient: client, objectsPrefix: objectsPrefix}, nil
 }
 
 // UploadFile uploads an object.
 func (gs *GStorage) UploadFile(bucket, filePath string) error {
+
 	// Open local file in filePath
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -48,8 +56,8 @@ func (gs *GStorage) UploadFile(bucket, filePath string) error {
 	defer cancel()
 
 	// Upload an object with storage.Writer.
-	fileName := filepath.Base(filePath)
-	wc := gs.storageClient.Bucket(bucket).Object(fileName).NewWriter(ctx)
+	object := gs.objectsPrefix + filepath.Base(filePath)
+	wc := gs.storageClient.Bucket(bucket).Object(object).NewWriter(ctx)
 	if _, err = io.Copy(wc, f); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	}
@@ -57,7 +65,7 @@ func (gs *GStorage) UploadFile(bucket, filePath string) error {
 		return fmt.Errorf("Writer.Close: %v", err)
 	}
 
-	fmt.Printf("Blob %v uploaded.\n", fileName)
+	fmt.Printf("Blob %v uploaded to %v.\n", filepath.Base(filePath), object)
 	return nil
 }
 
@@ -72,10 +80,11 @@ func (gs *GStorage) DownloadFile(bucket, object string, destFileName string) err
 		return fmt.Errorf("os.Create: %v", err)
 	}
 
-	rc, err := gs.storageClient.Bucket(bucket).Object(object).NewReader(ctx)
+	rc, err := gs.storageClient.Bucket(bucket).Object(gs.objectsPrefix + object).NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
 		return err
 	}
+
 	if err != nil {
 		return fmt.Errorf("Object(%q).NewReader: %v", object, err)
 	}

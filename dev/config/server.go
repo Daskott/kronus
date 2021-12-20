@@ -13,6 +13,8 @@ sqlite:
 
 google:
   storage:
+    bucket: "kronus"
+    prefix: "kronus"
     enableSQliteDbBackupAndSync: true
   applicationCredentials: ""
 
