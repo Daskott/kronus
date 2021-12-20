@@ -11,7 +11,7 @@ import (
 )
 
 type WorkerPool struct {
-	Handlers    map[string]Handler
+	handlers    map[string]Handler
 	workers     []*worker
 	reaper      *stuckJobsreaper
 	concurrency int
@@ -20,7 +20,7 @@ type WorkerPool struct {
 
 func NewWorkerPool(concurrency int) *WorkerPool {
 	wp := WorkerPool{
-		Handlers:    make(map[string]Handler),
+		handlers:    make(map[string]Handler),
 		concurrency: concurrency,
 		reaper:      NewStuckJobsReaper(),
 	}
@@ -33,8 +33,8 @@ func NewWorkerPool(concurrency int) *WorkerPool {
 }
 
 // RegisterHandler binds a name to a job handler for all workers in pool
-func (wp *WorkerPool) RegisterHandler(name string, handler Handler) error {
-	if _, ok := wp.Handlers[name]; ok {
+func (wp *WorkerPool) registerHandler(name string, handler Handler) error {
+	if _, ok := wp.handlers[name]; ok {
 		return ErrDuplicateHandler
 	}
 
@@ -49,8 +49,10 @@ func (wp *WorkerPool) RegisterHandler(name string, handler Handler) error {
 	return nil
 }
 
-// Enqueue adds a job to the queue(to be executed) by creating a DB record based on 'JobParams' provided
-func (wp *WorkerPool) Enqueue(job JobParams) error {
+// Enqueue adds a job to the queue(to be executed) by creating a DB record based on 'JobParams' provided.
+// Each job is unique by name. Can't have more than one job with the same name 'enqueued' or 'in-progress'
+// at the same time.
+func (wp *WorkerPool) enqueue(job JobParams) error {
 	if strings.TrimSpace(job.Name) == "" || strings.TrimSpace(job.Handler) == "" {
 		return fmt.Errorf("both a name & handler is required for a job")
 	}
@@ -71,7 +73,7 @@ func (wp *WorkerPool) Enqueue(job JobParams) error {
 }
 
 // Start starts all workers in pool & job reaper i.e the workers can start processing jobs
-func (wp *WorkerPool) Start() {
+func (wp *WorkerPool) start() {
 	if wp.started {
 		return
 	}

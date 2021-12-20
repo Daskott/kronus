@@ -82,7 +82,7 @@ func populateDBWithSeedData() {
 }
 
 func dbDSN(passPhrase string, dbRootDir string) (string, error) {
-	dbDir, err := dbDirectory(dbRootDir)
+	dbDir, err := DbDirectory(dbRootDir)
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +97,7 @@ func dbDSN(passPhrase string, dbRootDir string) (string, error) {
 	), nil
 }
 
-func dbDirectory(dbRootDir string) (string, error) {
+func DbDirectory(dbRootDir string) (string, error) {
 	dbDir := filepath.Join(dbRootDir, "db")
 
 	err := utils.CreateDirIfNotExist(dbDir)

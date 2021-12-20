@@ -13,7 +13,7 @@ import (
 
 	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
-	"github.com/Daskott/kronus/server/pbscheduler"
+	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/utils"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
@@ -80,7 +80,7 @@ func probeSettingFieldsFromParams(params map[string]interface{}) map[string]inte
 	return newParams
 }
 
-func Registervalidators(validate *validator.Validate) error {
+func RegisterValidators(validate *validator.Validate) error {
 	err := validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
 		// if whitespace in password return false
 		err := validate.Var(fl.Field().String(), "contains= ")
@@ -187,9 +187,9 @@ func serve(server *http.Server) {
 	}
 }
 
-func cleanup(probeScheduler *pbscheduler.ProbeScheduler, server *http.Server) {
-	// Stop liveliness probe job workers
-	probeScheduler.StopWorkers()
+func cleanup(workerPool *work.WorkerPoolAdapter, server *http.Server) {
+	// Stop all jobs i.e. liveliness probes & regular server jobs
+	workerPool.Stop()
 
 	// Shutdown server gracefully
 	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

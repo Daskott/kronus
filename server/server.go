@@ -12,6 +12,7 @@ import (
 	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/pbscheduler"
+	"github.com/Daskott/kronus/server/work"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
@@ -26,6 +27,7 @@ type DecodedJWT struct {
 
 var (
 	probeScheduler *pbscheduler.ProbeScheduler
+	workerPool     *work.WorkerPoolAdapter
 	authKeyPair    *key.KeyPair
 
 	validate = validator.New()
@@ -36,23 +38,28 @@ func Start(config *viper.Viper, devMode bool) {
 	var configDir string
 	var err error
 
-	router := mux.NewRouter()
-	protectedRouter := router.NewRoute().Subrouter()
-	adminRouter := router.NewRoute().Subrouter()
-
-	err = Registervalidators(validate)
-	fatalOnError(err)
-
-	probeScheduler, err = pbscheduler.NewProbeScheduler(config.GetString("kronus.cron.timeZone"))
-	fatalOnError(err)
-
-	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
+	err = RegisterValidators(validate)
 	fatalOnError(err)
 
 	configDir = configDirectory(devMode)
 
 	err = models.AutoMigrate(config.GetString("sqlite.passPhrase"), configDir)
 	fatalOnError(err)
+
+	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
+	fatalOnError(err)
+
+	workerPool = work.NewWorkerAdapter(config.GetString("kronus.cron.timeZone"))
+	registerJobHandlers(workerPool)
+	enqueueJobs(workerPool)
+
+	probeScheduler, err = pbscheduler.NewProbeScheduler(workerPool)
+	fatalOnError(err)
+	probeScheduler.ScheduleProbes()
+
+	router := mux.NewRouter()
+	protectedRouter := router.NewRoute().Subrouter()
+	adminRouter := router.NewRoute().Subrouter()
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%v", config.GetString("kronus.listener.port")),
@@ -78,8 +85,9 @@ func Start(config *viper.Viper, devMode bool) {
 	router.HandleFunc("/login", logInHandler).Methods("POST")
 	router.Use(loggingMiddleware, initialContextMiddleware)
 
-	// Start liveliness probe job workers
-	probeScheduler.StartWorkers()
+	// Start all jobs i.e liveliness probes & regoular server jobs
+	err = workerPool.Start()
+	fatalOnError(err)
 
 	// Start server
 	go serve(server)
@@ -90,5 +98,5 @@ func Start(config *viper.Viper, devMode bool) {
 	<-signalChan
 
 	// Shutdown gracefully
-	cleanup(probeScheduler, server)
+	cleanup(workerPool, server)
 }

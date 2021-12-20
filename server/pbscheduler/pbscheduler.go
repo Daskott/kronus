@@ -1,7 +1,6 @@
 package pbscheduler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,47 +8,32 @@ import (
 
 	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/models"
-	"github.com/Daskott/kronus/server/cron"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/work"
-	"github.com/go-co-op/gocron"
 	"gorm.io/gorm"
 )
 
 const (
-	MAX_PROBE_RETRIES = 3
-
-	SEND_LIVELINESS_PROBE_HANDLER = "send_liveliness_probe"
-	SEND_FOLLOWUP_PROBE_HANDLER   = "send_followup_probe"
-	SEND_EMERGENCY_PROBE_HANDLER  = "send_emergency_probe"
-
-	FOLLOWUP_PROBE_RECCURRING_CRON_TIME = "5m"
+	MAX_PROBE_RETRIES               = 3
+	SEND_LIVELINESS_PROBE_HANDLER   = "send_liveliness_probe"
+	SEND_FOLLOWUP_PROBE_HANDLER     = "send_followup_probe"
+	SEND_EMERGENCY_PROBE_HANDLER    = "send_emergency_probe"
+	ENQUEUE_FOLLOWUP_PROBES_HANDLER = "enqueue_followup_probes"
 )
 
 var logg = logger.NewLogger()
 
 type ProbeScheduler struct {
-	WorkerAdapter *work.WorkerAdapter
-	cronScheduler *gocron.Scheduler
+	workerPoolAdapter *work.WorkerPoolAdapter
 }
 
 // NewProbeScheduler creates new probe scheduler
-func NewProbeScheduler(timeZone string) (*ProbeScheduler, error) {
+func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter) (*ProbeScheduler, error) {
 	probeScheduler := ProbeScheduler{
-		cronScheduler: cron.NewCronScheduler(timeZone),
-		WorkerAdapter: work.NewWorkerAdapter(),
+		workerPoolAdapter: workerPoolAdapter,
 	}
 
-	// Register worker handlers
-	err := probeScheduler.WorkerAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, sendLivelinessProbe)
-	if err != nil {
-		return nil, err
-	}
-	err = probeScheduler.WorkerAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, sendFollowupForProbe)
-	if err != nil {
-		return nil, err
-	}
-	err = probeScheduler.WorkerAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, sendEmergencyProbe)
+	err := registerWorkerHandlers(&probeScheduler)
 	if err != nil {
 		return nil, err
 	}
@@ -57,75 +41,48 @@ func NewProbeScheduler(timeZone string) (*ProbeScheduler, error) {
 	return &probeScheduler, nil
 }
 
-// AddCronJobForProbe creates 'liveliness probe' cron jobs for user.
+// PeriodicallyPerfomProbe creates 'liveliness probe' cron jobs for user.
 // And when each cron is triggered, the job is sent to a job to be executed.
-func (pScheduler ProbeScheduler) AddCronJobForProbe(user models.User) {
-	pScheduler.cronScheduler.Cron(user.ProbeSettings.CronExpression).
-		Tag(probeName(user.ID)).
-		Do(
-			func(user models.User) {
-				// Enqueue liveliness probe job for user when cron job is triggered
-				err := pScheduler.WorkerAdapter.Perform(work.JobParams{
-					Name:    probeName(user.ID),
-					Handler: SEND_LIVELINESS_PROBE_HANDLER,
-					Args: map[string]interface{}{
-						"user_id":    user.ID,
-						"first_name": user.FirstName,
-						"last_name":  user.LastName,
-					},
-					Unique: true,
-				})
-
-				if err != nil {
-					logg.Error(err)
-				}
-			},
-			user,
-		)
+func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
+	pbs.workerPoolAdapter.PeriodicallyPerform(user.ProbeSettings.CronExpression, work.JobParams{
+		Name:    probeName(user.ID),
+		Handler: SEND_LIVELINESS_PROBE_HANDLER,
+		Args: map[string]interface{}{
+			"user_id":    user.ID,
+			"first_name": user.FirstName,
+			"last_name":  user.LastName,
+		},
+		Unique: true,
+	})
 }
 
 // RemoveCronJob removes probe cron job from scheduler & cancels any pending probe for user
-func (pScheduler ProbeScheduler) RemoveCronJobForProbe(user *models.User) {
-	pScheduler.cronScheduler.RemoveByTag(probeName(user.ID))
+func (pbs ProbeScheduler) RemovePeriodicProbe(user *models.User) {
+	pbs.workerPoolAdapter.RemovePeriodicJob(probeName(user.ID))
 	user.CancelAllPendingProbes()
 }
 
-// StartWorkers adds probes to cron scheduler,
-// then starts the cron scheduler and job workers
-func (pScheduler ProbeScheduler) StartWorkers() {
-	err := pScheduler.setCronJobsForInitialProbes()
+// ScheduleProbes adds probes to cron scheduler,
+// as well as check-ins for possible followup probes
+func (pScheduler ProbeScheduler) ScheduleProbes() {
+	err := pScheduler.initUsersPeriodicProbes()
 	if err != nil {
 		logg.Panic(err)
 	}
 
-	pScheduler.setCronJobsForFollowupProbes()
-
-	// Start cron jobs that handle enqueuing of 'probe' jobs
-	pScheduler.cronScheduler.StartAsync()
-
-	// Start worker that executes queued jobs
-	pScheduler.WorkerAdapter.Start(context.TODO())
-}
-
-// StopWorkers safely stops all cron jobs and job workers
-func (pScheduler ProbeScheduler) StopWorkers() {
-	// Start cron jobs that handle enqueuing of 'probe' jobs
-	pScheduler.cronScheduler.Stop()
-
-	// Start worker that executes queued jobs
-	pScheduler.WorkerAdapter.Stop()
+	pScheduler.initPeriodicFollowupProbesEnqeuer()
 }
 
 // Creates 'liveliness probe' cron jobs for users with 'active' probe_settings.
 // And when each cron is triggered, the job is sent to a queue to be executed.
-func (pScheduler ProbeScheduler) setCronJobsForInitialProbes() error {
+func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 	users, err := models.UsersWithActiveProbe()
 	if err != nil {
 		return err
 	}
 
 	for _, user := range users {
-		pScheduler.AddCronJobForProbe(user)
+		pScheduler.PeriodicallyPerfomProbe(user)
 	}
 	logg.Infof("%v liveliness probe(s) cron scheduled", len(users))
 
@@ -134,17 +91,21 @@ func (pScheduler ProbeScheduler) setCronJobsForInitialProbes() error {
 
 // Creates 'followup probe' cron jobs for users with 'pending' liveliness probes.
 // And when each cron is triggered i.e every 30mins, followup jobs are sent to a queue to be executed.
-func (pScheduler ProbeScheduler) setCronJobsForFollowupProbes() {
-	pScheduler.cronScheduler.Every(FOLLOWUP_PROBE_RECCURRING_CRON_TIME).
-		Do(pScheduler.sendFollowUpsForProbes)
+func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
+	pbs.workerPoolAdapter.PeriodicallyPerform("*/5 * * * *", work.JobParams{
+		Name:    ENQUEUE_FOLLOWUP_PROBES_HANDLER,
+		Handler: ENQUEUE_FOLLOWUP_PROBES_HANDLER,
+		Args:    map[string]interface{}{},
+		Unique:  true,
+	})
 }
 
-func (pScheduler ProbeScheduler) sendFollowUpsForProbes() {
+func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]interface{}) error {
 	noOfFollowupProbeJobsQueued := 0
 	probes, err := models.ProbesByStatus(models.PENDING_PROBE)
 	if err != nil {
 		logg.Error(err)
-		return
+		return nil
 	}
 
 	for _, probe := range probes {
@@ -154,7 +115,7 @@ func (pScheduler ProbeScheduler) sendFollowUpsForProbes() {
 
 		// if max retries is exceeded, send emergency probe
 		if probe.RetryCount >= MAX_PROBE_RETRIES {
-			err = pScheduler.WorkerAdapter.Perform(work.JobParams{
+			err = pScheduler.workerPoolAdapter.Perform(work.JobParams{
 				Name:    emergencyProbeName(probe.UserID),
 				Handler: SEND_EMERGENCY_PROBE_HANDLER,
 				Args:    jobArgs,
@@ -180,7 +141,7 @@ func (pScheduler ProbeScheduler) sendFollowUpsForProbes() {
 			continue
 		}
 
-		err = pScheduler.WorkerAdapter.Perform(work.JobParams{
+		err = pScheduler.workerPoolAdapter.Perform(work.JobParams{
 			Name:    followupProbeName(probe.UserID),
 			Handler: SEND_FOLLOWUP_PROBE_HANDLER,
 			Args:    jobArgs,
@@ -196,23 +157,13 @@ func (pScheduler ProbeScheduler) sendFollowUpsForProbes() {
 
 	logg.Infof("%v pending liveliness probe(s) found", len(probes))
 	logg.Infof("%v followup probe job(s) queued", noOfFollowupProbeJobsQueued)
+
+	return nil
 }
 
 // ---------------------------------------------------------------------------------//
-// Helper functions
+// Tasks
 // --------------------------------------------------------------------------------//
-
-func probeName(userID interface{}) string {
-	return fmt.Sprintf("%v-%v", SEND_LIVELINESS_PROBE_HANDLER, userID)
-}
-
-func followupProbeName(userID interface{}) string {
-	return fmt.Sprintf("%v-%v", SEND_FOLLOWUP_PROBE_HANDLER, userID)
-}
-
-func emergencyProbeName(userID interface{}) string {
-	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
-}
 
 func sendLivelinessProbe(params map[string]interface{}) error {
 	enabled, err := isProbeEnabled(params["user_id"])
@@ -336,13 +287,50 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 	sendMessage(message)
 
 	// Record emregency probe sent out
-	// TODO: Retry, but in worst case scenario, it's okay to fail
 	err = models.CreateEmergencyProbe(params["probe_id"], emergencyContact.ID)
 	if err != nil {
 		logg.Error(err)
 	}
 
 	return nil
+}
+
+// ---------------------------------------------------------------------------------//
+// Helper functions
+// --------------------------------------------------------------------------------//
+func registerWorkerHandlers(probeScheduler *ProbeScheduler) error {
+	err := probeScheduler.workerPoolAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, sendLivelinessProbe)
+	if err != nil {
+		return err
+	}
+
+	err = probeScheduler.workerPoolAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, sendFollowupForProbe)
+	if err != nil {
+		return err
+	}
+
+	err = probeScheduler.workerPoolAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, sendEmergencyProbe)
+	if err != nil {
+		return err
+	}
+
+	err = probeScheduler.workerPoolAdapter.Register(ENQUEUE_FOLLOWUP_PROBES_HANDLER, probeScheduler.enqueueFollowUpsForProbes)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func probeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_LIVELINESS_PROBE_HANDLER, userID)
+}
+
+func followupProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_FOLLOWUP_PROBE_HANDLER, userID)
+}
+
+func emergencyProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
 }
 
 func isProbeEnabled(userID interface{}) (bool, error) {

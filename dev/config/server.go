@@ -11,6 +11,11 @@ kronus:
 sqlite:
   passPhrase: passphrase
 
+google:
+  storage:
+    enableSQliteDbBackupAndSync: true
+  applicationCredentials: ""
+
 twilio:
   key:
   number:

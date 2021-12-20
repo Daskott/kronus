@@ -3,6 +3,7 @@ module github.com/Daskott/kronus
 go 1.17
 
 require (
+	cloud.google.com/go/storage v1.10.0
 	github.com/fatih/color v1.13.0
 	github.com/go-co-op/gocron v1.10.0
 	github.com/go-playground/validator v9.31.0+incompatible

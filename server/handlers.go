@@ -227,9 +227,9 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	if activateProbe, ok := params["active"].(bool); ok {
 		if activateProbe {
-			probeScheduler.AddCronJobForProbe(*currentUser)
+			probeScheduler.PeriodicallyPerfomProbe(*currentUser)
 		} else {
-			probeScheduler.RemoveCronJobForProbe(currentUser)
+			probeScheduler.RemovePeriodicProbe(currentUser)
 		}
 	}
 
