@@ -13,12 +13,17 @@ import (
 type WorkerPool struct {
 	Handlers    map[string]Handler
 	workers     []*worker
+	reaper      *stuckJobsreaper
 	concurrency int
 	started     bool
 }
 
 func NewWorkerPool(concurrency int) *WorkerPool {
-	wp := WorkerPool{Handlers: make(map[string]Handler), concurrency: concurrency}
+	wp := WorkerPool{
+		Handlers:    make(map[string]Handler),
+		concurrency: concurrency,
+		reaper:      NewStuckJobsReaper(),
+	}
 
 	for i := 0; i < concurrency; i++ {
 		wp.workers = append(wp.workers, NewWorker([]int64{0, 10, 100, 120}))
@@ -65,7 +70,7 @@ func (wp *WorkerPool) Enqueue(job JobParams) error {
 	return nil
 }
 
-// Start starts all workers in pool i.e the workes can start processing jobs
+// Start starts all workers in pool & job reaper i.e the workers can start processing jobs
 func (wp *WorkerPool) Start() {
 	if wp.started {
 		return
@@ -75,9 +80,11 @@ func (wp *WorkerPool) Start() {
 	for _, worker := range wp.workers {
 		go worker.start()
 	}
+
+	wp.reaper.start()
 }
 
-// Stop stops all workers in pool i.e jobs will stop being processed
+// Stop stops all workers in pool & job reaper i.e jobs will stop being processed
 func (wp *WorkerPool) stop() {
 	if !wp.started {
 		return
@@ -93,4 +100,6 @@ func (wp *WorkerPool) stop() {
 	}
 	wg.Wait()
 	wp.started = false
+
+	wp.reaper.stop()
 }

@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -90,6 +91,31 @@ func LastJob(status string, claimed bool) (*Job, error) {
 
 	job := Job{}
 	err = db.Where("job_status_id = ? AND claimed = ?", enqueuedJobStatus.ID, claimed).Last(&job).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &job, nil
+}
+
+// LastJobOlderThan returns the last job which was last updated 'arg1' minutes ago
+// and is of 'arg2' status.
+// i.e last record where job.updated_at + 'arg1' minutes <= 'now'.
+//
+// WARNING: THIS QUERY IS UNIQE TO SQLITE, REMEMBER TO UPDATE IT IF/WHEN
+// OTHER SQL DATABASES
+func LastJobLastUpdated(minutesAgo uint, status string) (*Job, error) {
+	jobStatus := JobStatus{}
+	err := db.Where(&JobStatus{Name: status}).Find(&jobStatus).Error
+	if err != nil {
+		return nil, err
+	}
+
+	job := Job{}
+	err = db.Where(
+		fmt.Sprintf("job_status_id = ? AND datetime(updated_at, '+%v minute') <= datetime('now')", minutesAgo),
+		jobStatus.ID,
+	).Last(&job).Error
 	if err != nil {
 		return nil, err
 	}
