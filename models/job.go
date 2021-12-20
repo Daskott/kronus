@@ -103,7 +103,7 @@ func LastJob(status string, claimed bool) (*Job, error) {
 // i.e last record where job.updated_at + 'arg1' minutes <= 'now'.
 //
 // WARNING: THIS QUERY IS UNIQE TO SQLITE, REMEMBER TO UPDATE IT IF/WHEN
-// OTHER SQL DATABASES
+// OTHER SQL DATABASES ARE SUPPORTED
 func LastJobLastUpdated(minutesAgo uint, status string) (*Job, error) {
 	jobStatus := JobStatus{}
 	err := db.Where(&JobStatus{Name: status}).Find(&jobStatus).Error
