@@ -8,8 +8,9 @@ import (
 	"github.com/Daskott/kronus/utils"
 )
 
+// TODO: In dev mode upload nothing ?
 func backupSqliteDb(map[string]interface{}) error {
-	bucket := config.GetString("google.storage.bucket")
+	logg.Info("Backing up Sqlite db...")
 
 	dbDir, err := models.DbDirectory(configDir)
 	if err != nil {
@@ -19,7 +20,7 @@ func backupSqliteDb(map[string]interface{}) error {
 	// Upload db file
 	file := filepath.Join(dbDir, models.DB_NAME)
 	if utils.FileExist(file) {
-		err = storage.UploadFile(bucket, file)
+		err = storage.UploadFile(file)
 		if err != nil {
 			return err
 		}
@@ -28,7 +29,7 @@ func backupSqliteDb(map[string]interface{}) error {
 	// Upload db shm file
 	file = filepath.Join(dbDir, models.DB_NAME+"-shm")
 	if utils.FileExist(file) {
-		err = storage.UploadFile(bucket, file)
+		err = storage.UploadFile(file)
 		if err != nil {
 			return err
 		}
@@ -37,12 +38,13 @@ func backupSqliteDb(map[string]interface{}) error {
 	// Upload db wal file
 	file = filepath.Join(dbDir, models.DB_NAME+"-wal")
 	if utils.FileExist(file) {
-		err = storage.UploadFile(bucket, file)
+		err = storage.UploadFile(file)
 		if err != nil {
 			return err
 		}
 	}
 
+	logg.Info("Sqlite db backup done")
 	return nil
 }
 
@@ -51,12 +53,13 @@ func registerJobHandlers(wpa *work.WorkerPoolAdapter) {
 }
 
 func enqueueJobs(wpa *work.WorkerPoolAdapter) {
-	if config.GetBool("google.storage.enableSQliteDbBackupAndSync") {
-		wpa.PeriodicallyPerform("*/5 * * * *", work.JobParams{
-			Name:    "backupSqliteDb",
-			Handler: "backupSqliteDb",
-			Unique:  false,
-			Args:    map[string]interface{}{},
-		})
+	if config.GetBool("google.storage.enableSqliteDbBackupAndSync") {
+		wpa.PeriodicallyPerform(config.GetString("google.storage.sqliteDbBackupSchedule"),
+			work.JobParams{
+				Name:    "backupSqliteDb",
+				Handler: "backupSqliteDb",
+				Unique:  false,
+				Args:    map[string]interface{}{},
+			})
 	}
 }

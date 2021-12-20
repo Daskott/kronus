@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Daskott/kronus/server/gstorage"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/utils"
 	sqliteEncrypt "github.com/jackfr0st13/gorm-sqlite-cipher"
@@ -19,9 +20,23 @@ const DB_NAME = "kronus.db"
 var logg = logger.NewLogger()
 var db *gorm.DB
 
-// AutoMigrate auo-migrate db schema and insert seed data
-func AutoMigrate(passPhrase string, dbRootDir string) error {
-	err := openDB(passPhrase, dbRootDir)
+// InitAndAutoMigrate does 4 things to initialize the database
+//
+// - download sqlite backup db if backup is enabled to blob storage
+//
+// - open the db file for read & write
+//
+// - auto migrate schema
+//
+// - and finally populate db with seed data
+func InitialiazeDb(passPhrase string, dbRootDir string, storage *gstorage.GStorage) error {
+	// if blob storage client is provided, download backup sqlite files
+	err := downloadDbBackups(storage, dbRootDir)
+	if err != nil {
+		return fmt.Errorf("failed to download sqlite backup: %v", err)
+	}
+
+	err = openDB(passPhrase, dbRootDir)
 	if err != nil {
 		return err
 	}
@@ -37,14 +52,23 @@ func AutoMigrate(passPhrase string, dbRootDir string) error {
 	return nil
 }
 
+func DbDirectory(dbRootDir string) (string, error) {
+	dbDir := filepath.Join(dbRootDir, "db")
+
+	err := utils.CreateDirIfNotExist(dbDir)
+	if err != nil {
+		return "", err
+	}
+
+	return dbDir, nil
+}
+
 // ---------------------------------------------------------------------------------//
 // Helper functions
 // --------------------------------------------------------------------------------//
 func openDB(passPhrase string, dbRootDir string) error {
 	var err error
 	var dbDSNVal string
-
-	// TODO: pull db from google storage if it exist, before db starts
 
 	dbDSNVal, err = dbDSN(passPhrase, dbRootDir)
 	if err != nil {
@@ -101,13 +125,43 @@ func dbDSN(passPhrase string, dbRootDir string) (string, error) {
 	), nil
 }
 
-func DbDirectory(dbRootDir string) (string, error) {
-	dbDir := filepath.Join(dbRootDir, "db")
-
-	err := utils.CreateDirIfNotExist(dbDir)
-	if err != nil {
-		return "", err
+func downloadDbBackups(storage *gstorage.GStorage, dbRootDir string) error {
+	if storage == nil {
+		logg.Info("Skipping sqlite db download - gstorage is nil")
+		return nil
 	}
 
-	return dbDir, nil
+	logg.Info("Downloading sqlite db backup...")
+
+	dbDir, err := DbDirectory(dbRootDir)
+	if err != nil {
+		return err
+	}
+
+	// Download db file
+	object := DB_NAME
+	detinationFile := filepath.Join(dbDir, object)
+	err = storage.DownloadFile(object, detinationFile)
+	if err != nil && err != gstorage.ErrObjectNotExist {
+		return err
+	}
+
+	// Download db shm file
+	object = DB_NAME + "-shm"
+	detinationFile = filepath.Join(dbDir, object)
+	err = storage.DownloadFile(object, detinationFile)
+	if err != nil && err != gstorage.ErrObjectNotExist {
+		return err
+	}
+
+	// Download db wal file
+	object = DB_NAME + "-wal"
+	detinationFile = filepath.Join(dbDir, object)
+	err = storage.DownloadFile(object, detinationFile)
+	if err != nil && err != gstorage.ErrObjectNotExist {
+		return err
+	}
+
+	logg.Info("Sqlite db download done")
+	return nil
 }

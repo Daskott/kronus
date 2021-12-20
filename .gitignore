@@ -18,6 +18,7 @@ todo.md
 
 # Sqlite files in dev env
 dev/db/
+dev/config/server.yml
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

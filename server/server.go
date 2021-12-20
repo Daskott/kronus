@@ -48,16 +48,17 @@ func Start(configArg *viper.Viper, devMode bool) {
 
 	configDir = configDirectory(devMode)
 
-	err = models.AutoMigrate(config.GetString("sqlite.passPhrase"), configDir)
-	fatalOnError(err)
-
-	if config.GetBool("google.storage.enableSQliteDbBackupAndSync") {
+	if config.GetBool("google.storage.enableSqliteDbBackupAndSync") {
 		storage, err = gstorage.NewGStorage(
 			config.GetString("google.applicationCredentials"),
+			config.GetString("google.storage.bucket"),
 			config.GetString("google.storage.prefix"),
 		)
 		fatalOnError(err)
 	}
+
+	err = models.InitialiazeDb(config.GetString("sqlite.passPhrase"), configDir, storage)
+	fatalOnError(err)
 
 	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
 	fatalOnError(err)
