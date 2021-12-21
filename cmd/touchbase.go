@@ -17,11 +17,17 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	devConfig "github.com/Daskott/kronus/dev/config"
 	"github.com/Daskott/kronus/googleservice"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 const maxContactsToTochbaseWith = 7
@@ -36,6 +42,13 @@ var (
 		2, // bi-weekly
 		4, // monthly
 	}
+
+	cfgFile   string
+	googleAPI googleservice.GCalendarAPIInterface
+
+	yellow       = color.New(color.FgYellow).SprintFunc()
+	red          = color.New(color.FgRed).SprintFunc()
+	warningLabel = yellow("Warning:")
 )
 
 func init() {
@@ -49,7 +62,7 @@ func createTouchbaseCmd() *cobra.Command {
 		Long: `Deletes previous touchbase google calender events created by kronus
 and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runtTouchbase(cmd)
+			return runtTouchbase(cmd, touchbaseConfig())
 		},
 	}
 
@@ -57,13 +70,16 @@ and creates new ones(up to a max of 7 contacts for a group) to match the values 
 	cmd.Flags().StringVarP(&groupArg, "group", "g", "", "group to create touchbase events for")
 	cmd.Flags().IntVarP(&frequencyArg, "freq", "f", 1, "how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly")
 	cmd.Flags().StringVarP(&timeSlotArg, "time-slot", "t", "18:00-18:30", "time slot in the day allocated for touching base")
+	cmd.Flags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kronus.yaml)")
 
 	cmd.MarkFlagRequired("group")
 
 	return cmd
 }
 
-func runtTouchbase(cmd *cobra.Command) error {
+func runtTouchbase(cmd *cobra.Command, config *viper.Viper) error {
+	initGCalendarAPI(config)
+
 	err := validateFlags()
 	if err != nil {
 		return err
@@ -71,7 +87,7 @@ func runtTouchbase(cmd *cobra.Command) error {
 
 	slotStartTime, slotEndTime := splitTimeSlot(timeSlotArg)
 
-	eventRecurrence := eventRecurrence()
+	eventRecurrence := eventRecurrence(config.GetString("settings.touchbase-recurrence"))
 
 	selectedGroupContactIds := config.GetStringSlice(fmt.Sprintf("groups.%s", groupArg))
 	if len(selectedGroupContactIds) == 0 {
@@ -138,8 +154,8 @@ func validateFlags() error {
 	return nil
 }
 
-func eventRecurrence() string {
-	return config.GetString("settings.touchbase-recurrence") +
+func eventRecurrence(recurrence string) string {
+	return recurrence +
 		fmt.Sprintf("COUNT=%d;INTERVAL=%d;", countArg, intervals[frequencyArg])
 }
 
@@ -165,4 +181,101 @@ func inList(list []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// ---------------------------------------------------------------------------------//
+// Config Helpers
+// --------------------------------------------------------------------------------//
+
+// initConfig reads in config file and ENV variables if set.
+func touchbaseConfig() *viper.Viper {
+	config := viper.New()
+
+	if cfgFile != "" {
+		// Use config file from the flag.
+		config.SetConfigFile(cfgFile)
+	} else {
+		configName, configDir, err := defaulatCFgNameAndDir()
+		cobra.CheckErr(err)
+
+		// If config file is not found, create one using defaultConfigFileContent
+		configFilePath := filepath.Join(configDir, configName)
+		if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
+			err = ioutil.WriteFile(configFilePath, []byte(devConfig.DEFAULT_TOUCHBASE_YML), 0600)
+			cobra.CheckErr(err)
+		}
+
+		// Search config in home directory with name ".kronus" (without extension).
+		config.AddConfigPath(configDir)
+		config.SetConfigType("yaml")
+		config.SetConfigName(configName)
+	}
+
+	// BIND secrets.GOOGLE... to GOOGLE_APPLICATION_CREDENTIALS env, so the value doesn't need to be
+	// stored in the .kronus.yaml config, but can be read from the system ENV var.
+	// FYI: The env var overrides whatever is in the config file
+	config.BindEnv("secrets.GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_APPLICATION_CREDENTIALS")
+
+	config.AutomaticEnv() // read in environment variables that match
+
+	// If a config file is found, read it in.
+	if err := config.ReadInConfig(); err == nil {
+		fmt.Fprintln(os.Stderr, "Using config file:", config.ConfigFileUsed())
+	}
+
+	return config
+}
+
+// TODO: Refactor this to return gcalAPI
+func initGCalendarAPI(config *viper.Viper) {
+	googleCredentials := config.GetString("secrets.GOOGLE_APPLICATION_CREDENTIALS")
+	ownerEmail := config.GetString("owner.email")
+
+	if googleCredentials == "" {
+		cobra.CheckErr(formattedError(
+			"must set the env var 'GOOGLE_APPLICATION_CREDENTIALS' or add it to 'secrets' in %s", config.ConfigFileUsed()))
+
+	}
+
+	if ownerEmail == "" {
+		cobra.CheckErr(formattedError("must set 'owner.email' in %s", config.ConfigFileUsed()))
+	}
+
+	// No need to use real googleAPI in tests
+	if isTestEnv {
+		return
+	}
+
+	var err error
+	googleAPI, err = googleservice.NewGoogleCalendarAPI(googleCredentials, ownerEmail)
+	cobra.CheckErr(err)
+}
+
+func defaulatCFgNameAndDir() (configName string, configDir string, err error) {
+	configName = ".kronus.yaml"
+
+	// Use home directory for production
+	configDir, err = os.UserHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+
+	if isDevEnv || isTestEnv {
+		configName = ".kronus.dev.yaml"
+		configDir, err = os.Getwd()
+		if err != nil {
+			return "", "", err
+		}
+
+		if isTestEnv {
+			configName = ".kronus.yaml"
+			configDir = filepath.Join(configDir, "test-fixtures")
+		}
+	}
+
+	return configName, configDir, err
+}
+
+func formattedError(format string, a ...interface{}) error {
+	return fmt.Errorf(red(format), a...)
 }

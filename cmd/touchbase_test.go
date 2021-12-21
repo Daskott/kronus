@@ -44,7 +44,7 @@ func TestTouchbaseCmd(t *testing.T) {
 			expectedOut: "no contacts in 'missing-group'",
 		},
 		{
-			description: "Should create touchbase events for contacts in family group",
+			description: "Should create touchbase events for contacts in 'family' group",
 			args:        []string{"--group", "family"},
 			expectedOut: "appointments with members of family have been created",
 		},
