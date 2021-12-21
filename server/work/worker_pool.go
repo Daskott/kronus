@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Daskott/kronus/models"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/pkg/errors"
 )
 

@@ -3,7 +3,7 @@ package server
 import (
 	"path/filepath"
 
-	"github.com/Daskott/kronus/models"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/utils"
 )

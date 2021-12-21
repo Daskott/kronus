@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Daskott/kronus/colors"
-	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/logger"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/work"
 	"gorm.io/gorm"
 )

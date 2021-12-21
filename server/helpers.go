@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/utils"
 	"github.com/go-playground/validator"

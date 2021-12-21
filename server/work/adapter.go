@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/cron"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/go-co-op/gocron"
 )
 

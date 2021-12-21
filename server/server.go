@@ -7,11 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/Daskott/kronus/server/gstorage"
 	"github.com/Daskott/kronus/server/logger"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/shared"

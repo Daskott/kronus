@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Daskott/kronus/models"
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
+	"github.com/Daskott/kronus/server/models"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
