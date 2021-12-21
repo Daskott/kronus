@@ -17,7 +17,7 @@ google:
     prefix: "kronus-dev"
     sqliteDbBackupSchedule: "*/5 * * * *"
     enableSqliteDbBackupAndSync: true
-  applicationCredentials: "/Users/edmondcotterell/Desktop/root/kronus/keep-up-326712-3f68f6abb4e7.json"
+  applicationCredentials: ""
 
 twilio:
   key:

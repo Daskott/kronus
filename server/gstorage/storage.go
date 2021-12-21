@@ -77,7 +77,7 @@ func (gs *GStorage) UploadFile(filePath string) error {
 		return fmt.Errorf("Writer.Close: %v", err)
 	}
 
-	gs.logInfof("%v uploaded to %v", filepath.Base(filePath), object)
+	gs.logInfof("%v uploaded to '%v'", filepath.Base(filePath), object)
 	return nil
 }
 
@@ -86,14 +86,14 @@ func (gs *GStorage) DownloadFile(object string, destFileName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*50)
 	defer cancel()
 
-	f, err := os.Create(destFileName)
-	if err != nil {
-		return fmt.Errorf("os.Create: %v", err)
-	}
-
 	rc, err := gs.storageClient.Bucket(gs.bucket).Object(gs.objectsPrefix + object).NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
 		return err
+	}
+
+	f, err := os.Create(destFileName)
+	if err != nil {
+		return fmt.Errorf("os.Create: %v", err)
 	}
 
 	if err != nil {
@@ -109,7 +109,7 @@ func (gs *GStorage) DownloadFile(object string, destFileName string) error {
 		return fmt.Errorf("f.Close: %v", err)
 	}
 
-	gs.logInfof("%v downloaded to local file %v", object, destFileName)
+	gs.logInfof("'%v' downloaded to local file %v", object, destFileName)
 
 	return nil
 
