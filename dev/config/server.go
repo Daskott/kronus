@@ -15,9 +15,9 @@ google:
   storage:
     bucket: "kronus"
     prefix: "kronus-dev"
-    sqliteDbBackupSchedule: "*/5 * * * *"
-    enableSqliteDbBackupAndSync: true
-  applicationCredentials: ""
+    sqliteBackupSchedule: "*/30 * * * *"
+    enableSqliteBackupAndSync: true
+  applicationCredentials:
 
 twilio:
   key:

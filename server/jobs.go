@@ -8,7 +8,6 @@ import (
 	"github.com/Daskott/kronus/utils"
 )
 
-// TODO: In dev mode upload nothing ?
 func backupSqliteDb(map[string]interface{}) error {
 	logg.Info("Backing up Sqlite db...")
 
@@ -53,13 +52,15 @@ func registerJobHandlers(wpa *work.WorkerPoolAdapter) {
 }
 
 func enqueueJobs(wpa *work.WorkerPoolAdapter) {
-	if config.GetBool("google.storage.enableSqliteDbBackupAndSync") {
-		wpa.PeriodicallyPerform(config.GetString("google.storage.sqliteDbBackupSchedule"),
+	if enabled, ok := config.Google.Storage.EnableSqliteBackupAndSync.(bool); ok && enabled {
+		wpa.PeriodicallyPerform(config.Google.Storage.SqliteBackupSchedule,
 			work.JobParams{
 				Name:    "backupSqliteDb",
 				Handler: "backupSqliteDb",
 				Unique:  false,
 				Args:    map[string]interface{}{},
 			})
+	} else {
+		logg.Info("Sqlite db backup turned off")
 	}
 }

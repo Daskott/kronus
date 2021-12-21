@@ -187,11 +187,13 @@ func serve(server *http.Server) {
 	}
 }
 
-func cleanup(workerPool *work.WorkerPoolAdapter, server *http.Server) {
+func cleanup(workerPool *work.WorkerPoolAdapter, server *http.Server, backupDb bool) {
 	// Stop all jobs i.e. liveliness probes & regular server jobs
 	workerPool.Stop()
 
-	backupSqliteDb(nil)
+	if backupDb {
+		backupSqliteDb(nil)
+	}
 
 	// Shutdown server gracefully
 	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

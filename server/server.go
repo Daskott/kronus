@@ -14,9 +14,21 @@ import (
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
+	"github.com/Daskott/kronus/shared"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
-	"github.com/spf13/viper"
+)
+
+var (
+	probeScheduler *pbscheduler.ProbeScheduler
+	workerPool     *work.WorkerPoolAdapter
+	authKeyPair    *key.KeyPair
+	storage        *gstorage.GStorage
+	config         *shared.ServerConfig
+	configDir      string
+
+	validate = validator.New()
+	logg     = logger.NewLogger()
 )
 
 type RequestContextKey string
@@ -26,19 +38,7 @@ type DecodedJWT struct {
 	ErrorMsg string
 }
 
-var (
-	probeScheduler *pbscheduler.ProbeScheduler
-	workerPool     *work.WorkerPoolAdapter
-	authKeyPair    *key.KeyPair
-	storage        *gstorage.GStorage
-	config         *viper.Viper
-	configDir      string
-
-	validate = validator.New()
-	logg     = logger.NewLogger()
-)
-
-func Start(configArg *viper.Viper, devMode bool) {
+func Start(configArg *shared.ServerConfig, devMode bool) {
 	var err error
 
 	config = configArg
@@ -48,22 +48,22 @@ func Start(configArg *viper.Viper, devMode bool) {
 
 	configDir = configDirectory(devMode)
 
-	if config.GetBool("google.storage.enableSqliteDbBackupAndSync") {
+	if enabled, ok := config.Google.Storage.EnableSqliteBackupAndSync.(bool); ok && enabled {
 		storage, err = gstorage.NewGStorage(
-			config.GetString("google.applicationCredentials"),
-			config.GetString("google.storage.bucket"),
-			config.GetString("google.storage.prefix"),
+			config.Google.ApplicationCredentials,
+			config.Google.Storage.Bucket,
+			config.Google.Storage.Prefix,
 		)
 		fatalOnError(err)
 	}
 
-	err = models.InitialiazeDb(config.GetString("sqlite.passPhrase"), configDir, storage)
+	err = models.InitialiazeDb(config.Sqlite.PassPhrase, configDir, storage)
 	fatalOnError(err)
 
-	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.GetString("kronus.privateKeyPem"))
+	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.Kronus.PrivateKeyPem)
 	fatalOnError(err)
 
-	workerPool = work.NewWorkerAdapter(config.GetString("kronus.cron.timeZone"))
+	workerPool = work.NewWorkerAdapter(config.Kronus.Cron.TimeZone)
 	registerJobHandlers(workerPool)
 	enqueueJobs(workerPool)
 
@@ -76,7 +76,7 @@ func Start(configArg *viper.Viper, devMode bool) {
 	adminRouter := router.NewRoute().Subrouter()
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%v", config.GetString("kronus.listener.port")),
+		Addr:    fmt.Sprintf(":%v", config.Kronus.Listener.Port),
 		Handler: router,
 	}
 
@@ -112,5 +112,5 @@ func Start(configArg *viper.Viper, devMode bool) {
 	<-signalChan
 
 	// Shutdown gracefully
-	cleanup(workerPool, server)
+	cleanup(workerPool, server, storage != nil)
 }
