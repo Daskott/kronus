@@ -187,7 +187,8 @@ func inList(list []string, item string) bool {
 // Config Helpers
 // --------------------------------------------------------------------------------//
 
-// initConfig reads in config file and ENV variables if set.
+// touchbaseConfig reads in config file and ENV variables & returns a single
+// '*viper.Viper' config object
 func touchbaseConfig() *viper.Viper {
 	config := viper.New()
 

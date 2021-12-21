@@ -31,6 +31,8 @@ You may need to set the following environment variable:
 Development mode should NOT be used in production installations!
 `
 
+var serverCongFile string
+
 var validate = validator.New()
 
 func init() {
@@ -38,41 +40,40 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	rootCmd.AddCommand(createServerCmd())
 }
 
-// serverCmd represents the server command
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Start a kronus server",
-	Long:  `The kronus server houses functionality for liveliness probes(aka dead man's switch)`,
-	PreRun: func(cmd *cobra.Command, args []string) {
-		if isDevEnv {
-			return
-		}
+func createServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "server",
+		Short: "Start a kronus server",
+		Long:  `The kronus server houses functionality for liveliness probes(aka dead man's switch)`,
+		PreRun: func(cmd *cobra.Command, args []string) {
+			if isDevEnv {
+				return
+			}
 
-		cmd.MarkFlagRequired("sconfig")
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		config, err := serverConfig()
-		if err != nil {
-			return err
-		}
+			cmd.MarkFlagRequired("config")
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			config, err := serverConfig()
+			if err != nil {
+				return err
+			}
 
-		if isDevEnv {
-			cmd.Println(colors.Yellow(DEV_MODE_MESSAGE))
-		}
+			if isDevEnv {
+				cmd.Println(colors.Yellow(DEV_MODE_MESSAGE))
+			}
 
-		server.Start(config, isDevEnv)
-		return nil
-	},
-}
+			server.Start(config, isDevEnv)
+			return nil
+		},
+	}
 
-var serverCongFile string
+	cmd.Flags().StringVar(&serverCongFile, "config", "", "Config for kronus server")
 
-func init() {
-	rootCmd.AddCommand(serverCmd)
-
-	serverCmd.Flags().StringVar(&serverCongFile, "sconfig", "", "Config for server")
+	return cmd
 }
 
 func serverConfig() (*shared.ServerConfig, error) {
