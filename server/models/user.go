@@ -39,12 +39,22 @@ type User struct {
 	Probes        []Probe       `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
+// DisableProbe turns off probe for user & cancels all pending probes
+func (user *User) DisableLivlinessProbe() error {
+	err := user.UpdateProbSettings(map[string]interface{}{"active": false})
+	if err != nil {
+		return err
+	}
+
+	return user.CancelAllPendingProbes()
+}
+
 func (user *User) CancelAllPendingProbes() error {
 	probes := []Probe{}
 
 	// Fetch all pending probes for user
 	err := db.Joins(
-		"INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?", "pending").
+		"INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?", PENDING_PROBE).
 		Where("user_id = ?", user.ID).Find(&probes).Error
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -54,7 +64,7 @@ func (user *User) CancelAllPendingProbes() error {
 	// If pending probes exist, set status for all of them to 'cancelled'
 	if len(probes) > 0 {
 		cancelledStatus := ProbeStatus{}
-		err := db.Where(&ProbeStatus{Name: "cancelled"}).Find(&cancelledStatus).Error
+		err := db.Where(&ProbeStatus{Name: CANCELLED_PROBE}).Find(&cancelledStatus).Error
 		if err != nil {
 			return err
 		}
@@ -124,14 +134,23 @@ func (user *User) EmergencyContact() (*Contact, error) {
 	return &contact, nil
 }
 
-func LastProbeForUser(userID interface{}) (*Probe, error) {
+func (user *User) LastProbe() (*Probe, error) {
 	probe := Probe{}
-	err := db.Where("user_id = ?", userID).Last(&probe).Error
+	err := db.Where("user_id = ?", user.ID).Last(&probe).Error
 	if err != nil {
 		return nil, err
 	}
 
 	return &probe, nil
+}
+
+func (user *User) IsProbeEnabled() (bool, error) {
+	pbSettings, err := FindProbeSettings(user.ID)
+	if err != nil {
+		return false, nil
+	}
+
+	return pbSettings.Active, nil
 }
 
 func FindProbeSettings(userID interface{}) (*ProbeSetting, error) {

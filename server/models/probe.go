@@ -1,18 +1,59 @@
 package models
 
-import "time"
+import (
+	"errors"
+	"strings"
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Probe struct {
 	BaseModel
-	Response       string
+	LastResponse   string
 	RetryCount     int
 	EmergencyProbe EmergencyProbe
 	UserID         uint `gorm:"not null"`
 	ProbeStatusID  uint
 }
 
+var ProbeStatusMapToResponse = map[string]map[string]bool{
+	GOOD_PROBE: {"yes": true, "yeah": true, "yh": true, "y": true},
+	BAD_PROBE:  {"no": true, "nope": true, "nah": true, "na": true, "n": true},
+}
+
 func (probe *Probe) Save() error {
 	return db.Save(&probe).Error
+}
+
+func (probe *Probe) IsPending() (bool, error) {
+	probeStatus := ProbeStatus{}
+
+	// If no record, then probe isn't pending
+	err := db.Where("id = ? AND name = ?", probe.ProbeStatusID, PENDING_PROBE).First(&probeStatus).Error
+	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+
+	// return false on error if it's not a 'ErrRecordNotFound'
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// StatusFromLastResponse returns the derived probe 'status' (i.e. 'good', 'bad', or '')
+// based on 'LastResponse'(i.e. the linked user's last response) for the current probe
+func (probe *Probe) StatusFromLastResponse() string {
+	status := ""
+	for key, probeResp := range ProbeStatusMapToResponse {
+		if probeResp[strings.TrimSpace(strings.ToLower(probe.LastResponse))] {
+			status = key
+			break
+		}
+	}
+	return status
 }
 
 func SetProbeStatus(probeID interface{}, status string) error {

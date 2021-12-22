@@ -4,9 +4,8 @@ import "time"
 
 type EmergencyProbe struct {
 	BaseModel
-	ContactID    uint
-	ProbeID      uint
-	Acknowledged bool `gorm:"default:false"`
+	ContactID uint
+	ProbeID   uint
 }
 
 func CreateEmergencyProbe(probeID, contactID interface{}) error {

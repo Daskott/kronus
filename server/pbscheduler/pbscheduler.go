@@ -9,6 +9,7 @@ import (
 	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/models"
+	"github.com/Daskott/kronus/server/twilio"
 	"github.com/Daskott/kronus/server/work"
 	"gorm.io/gorm"
 )
@@ -25,15 +26,17 @@ var logg = logger.NewLogger()
 
 type ProbeScheduler struct {
 	workerPoolAdapter *work.WorkerPoolAdapter
+	messageClient     *twilio.ClientWrapper
 }
 
 // NewProbeScheduler creates new probe scheduler
-func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter) (*ProbeScheduler, error) {
+func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter, msgClient *twilio.ClientWrapper) (*ProbeScheduler, error) {
 	probeScheduler := ProbeScheduler{
 		workerPoolAdapter: workerPoolAdapter,
+		messageClient:     msgClient,
 	}
 
-	err := registerWorkerHandlers(&probeScheduler)
+	err := probeScheduler.registerWorkerHandlers()
 	if err != nil {
 		return nil, err
 	}
@@ -56,10 +59,10 @@ func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
 	})
 }
 
-// RemoveCronJob removes probe cron job from scheduler & cancels any pending probe for user
-func (pbs ProbeScheduler) RemovePeriodicProbe(user *models.User) {
+// DisablePeriodicProbe removes probe from scheduler & disables probe in user settings
+func (pbs ProbeScheduler) DisablePeriodicProbe(user *models.User) error {
 	pbs.workerPoolAdapter.RemovePeriodicJob(probeName(user.ID))
-	user.CancelAllPendingProbes()
+	return user.DisableLivlinessProbe()
 }
 
 // ScheduleProbes adds probes to cron scheduler,
@@ -89,6 +92,11 @@ func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 	return nil
 }
 
+// EmergencyProbeName returns the string used as tag for an emergency probe job name
+func EmergencyProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
+}
+
 // Creates 'followup probe' cron jobs for users with 'pending' liveliness probes.
 // And when each cron is triggered i.e every 30mins, followup jobs are sent to a queue to be executed.
 func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
@@ -115,8 +123,10 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 
 		// if max retries is exceeded, send emergency probe
 		if probe.RetryCount >= MAX_PROBE_RETRIES {
+			jobArgs["probe_status"] = models.UNAVAILABLE_PROBE
+
 			err = pScheduler.workerPoolAdapter.Perform(work.JobParams{
-				Name:    emergencyProbeName(probe.UserID),
+				Name:    EmergencyProbeName(probe.UserID),
 				Handler: SEND_EMERGENCY_PROBE_HANDLER,
 				Args:    jobArgs,
 				Unique:  true,
@@ -161,12 +171,27 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 	return nil
 }
 
+func (pScheduler ProbeScheduler) sendMessage(to, msg string) error {
+	err := pScheduler.messageClient.SendMessage(to, msg)
+	if err != nil {
+		return err
+	}
+
+	logg.Infof(fmt.Sprintf("%v %v", colors.Green("[message]"), msg))
+	return nil
+}
+
 // ---------------------------------------------------------------------------------//
 // Tasks
 // --------------------------------------------------------------------------------//
 
-func sendLivelinessProbe(params map[string]interface{}) error {
-	enabled, err := isProbeEnabled(params["user_id"])
+func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface{}) error {
+	user, err := models.FindUserBy("id", params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	enabled, err := user.IsProbeEnabled()
 	if err != nil {
 		return err
 	}
@@ -176,26 +201,27 @@ func sendLivelinessProbe(params map[string]interface{}) error {
 		return nil
 	}
 
-	lastProbe, err := models.LastProbeForUser(params["user_id"])
+	lastProbe, err := user.LastProbe()
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		logg.Error(err)
 		return err
 	}
 
-	pendingProbeStatus, err := models.FindProbeStatus(models.PENDING_PROBE)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		logg.Error(err)
-		return err
-	}
+	if lastProbe != nil {
+		isPendingProbe, err := lastProbe.IsPending()
+		if err != nil {
+			return err
+		}
 
-	if lastProbe != nil && lastProbe.ProbeStatusID == pendingProbeStatus.ID {
-		logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending probeID=%v",
-			params["user_id"], lastProbe.ID)
-		return nil
+		if isPendingProbe {
+			logg.Infof("skipping current probe for userID=%v, last liveliness probe is still pending probeID=%v",
+				params["user_id"], lastProbe.ID)
+			return nil
+		}
 	}
 
 	msg := fmt.Sprintf("Are you okay %v?", strings.Title(params["first_name"].(string)))
-	err = sendMessage(msg)
+	err = pScheduler.sendMessage(user.PhoneNumber, msg)
 	if err != nil {
 		logg.Error(err)
 		return err
@@ -211,8 +237,13 @@ func sendLivelinessProbe(params map[string]interface{}) error {
 	return nil
 }
 
-func sendFollowupForProbe(params map[string]interface{}) error {
-	enabled, err := isProbeEnabled(params["user_id"])
+func (pScheduler ProbeScheduler) sendFollowupForProbe(params map[string]interface{}) error {
+	user, err := models.FindUserBy("id", params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	enabled, err := user.IsProbeEnabled()
 	if err != nil {
 		return err
 	}
@@ -222,18 +253,13 @@ func sendFollowupForProbe(params map[string]interface{}) error {
 		return nil
 	}
 
-	user, err := models.FindUserBy("id", params["user_id"])
-	if err != nil {
-		return err
-	}
-
 	probe, err := models.FindProbe(params["probe_id"])
 	if err != nil {
 		return err
 	}
 
 	msg := fmt.Sprintf("Are you okay %v??", strings.Title(user.FirstName))
-	err = sendMessage(msg)
+	err = pScheduler.sendMessage(user.PhoneNumber, msg)
 	if err != nil {
 		return err
 	}
@@ -247,8 +273,13 @@ func sendFollowupForProbe(params map[string]interface{}) error {
 	return nil
 }
 
-func sendEmergencyProbe(params map[string]interface{}) error {
-	enabled, err := isProbeEnabled(params["user_id"])
+func (pScheduler ProbeScheduler) sendEmergencyProbe(params map[string]interface{}) error {
+	user, err := models.FindUserBy("id", params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	enabled, err := user.IsProbeEnabled()
 	if err != nil {
 		return err
 	}
@@ -258,13 +289,8 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 		return nil
 	}
 
-	// Set user liveliness probe status to 'unavailable'
-	err = models.SetProbeStatus(params["probe_id"], "unavailable")
-	if err != nil {
-		return err
-	}
-
-	user, err := models.FindUserBy("id", params["user_id"])
+	// Set user liveliness probe status to params["probe_status"] i.e. 'unavailable' or 'bad'
+	err = models.SetProbeStatus(params["probe_id"], params["probe_status"].(string))
 	if err != nil {
 		return err
 	}
@@ -274,20 +300,49 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 		return err
 	}
 
+	// Default message is the 'unavailable message'
 	message := fmt.Sprintf(
 		"Hi %v,\n"+
 			"you're getting this message becasue you're %v's emergency contact.\n"+
-			"%v missed their last routine check in, can you please reach out to %v\n"+
-			"and make sure they're okay?\n"+
-			"Thanks",
+			"%v missed their last routine check in, please reach out to %v and make sure they're okay.",
 		strings.Title(emergencyContact.FirstName), strings.Title(user.FirstName),
 		strings.Title(user.FirstName), strings.Title(user.FirstName))
 
+	// Otherwise send 'in trouble' msg for 'bad' probe
+	if params["probe_status"] == models.BAD_PROBE {
+		message = fmt.Sprintf(
+			"Hi %v,\n"+
+				"you're getting this message becasue you're %v's emergency contact.\n"+
+				"%v just indicated they're not doing okay at the moment.\n"+
+				"Please reach out ASAP to make sure all's okay.",
+			strings.Title(emergencyContact.FirstName), strings.Title(user.FirstName),
+			strings.Title(user.FirstName))
+	}
+
 	// Send message to emergency contact
-	sendMessage(message)
+	err = pScheduler.sendMessage(emergencyContact.PhoneNumber, message)
+	if err != nil {
+		return err
+	}
 
 	// Record emregency probe sent out
 	err = models.CreateEmergencyProbe(params["probe_id"], emergencyContact.ID)
+	if err != nil {
+		logg.Error(err)
+	}
+
+	err = pScheduler.DisablePeriodicProbe(user)
+	if err != nil {
+		logg.Error(err)
+	}
+
+	err = pScheduler.sendMessage(
+		user.PhoneNumber,
+		fmt.Sprintf(
+			"Reached out to %v. Liveliness probe is now disabled. You can always turn this back on via your kronus API.",
+			emergencyContact.FirstName,
+		),
+	)
 	if err != nil {
 		logg.Error(err)
 	}
@@ -298,18 +353,18 @@ func sendEmergencyProbe(params map[string]interface{}) error {
 // ---------------------------------------------------------------------------------//
 // Helper functions
 // --------------------------------------------------------------------------------//
-func registerWorkerHandlers(probeScheduler *ProbeScheduler) error {
-	err := probeScheduler.workerPoolAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, sendLivelinessProbe)
+func (probeScheduler *ProbeScheduler) registerWorkerHandlers() error {
+	err := probeScheduler.workerPoolAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, probeScheduler.sendLivelinessProbe)
 	if err != nil {
 		return err
 	}
 
-	err = probeScheduler.workerPoolAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, sendFollowupForProbe)
+	err = probeScheduler.workerPoolAdapter.Register(SEND_FOLLOWUP_PROBE_HANDLER, probeScheduler.sendFollowupForProbe)
 	if err != nil {
 		return err
 	}
 
-	err = probeScheduler.workerPoolAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, sendEmergencyProbe)
+	err = probeScheduler.workerPoolAdapter.Register(SEND_EMERGENCY_PROBE_HANDLER, probeScheduler.sendEmergencyProbe)
 	if err != nil {
 		return err
 	}
@@ -327,22 +382,4 @@ func probeName(userID interface{}) string {
 
 func followupProbeName(userID interface{}) string {
 	return fmt.Sprintf("%v-%v", SEND_FOLLOWUP_PROBE_HANDLER, userID)
-}
-
-func emergencyProbeName(userID interface{}) string {
-	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
-}
-
-func isProbeEnabled(userID interface{}) (bool, error) {
-	pbSettings, err := models.FindProbeSettings(userID)
-	if err != nil {
-		return false, nil
-	}
-
-	return pbSettings.Active, nil
-}
-
-func sendMessage(message string) error {
-	logg.Infof(fmt.Sprintf("%v %v", colors.Green("[message]"), message))
-	return nil
 }

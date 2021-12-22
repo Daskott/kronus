@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/Daskott/kronus/server/models"
+	"github.com/Daskott/kronus/server/pbscheduler"
+	"github.com/Daskott/kronus/server/work"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
@@ -25,6 +28,11 @@ type ResponsePayload struct {
 
 type TokenPayload struct {
 	Token string `json:"token"`
+}
+
+type TwilioSmsResponse struct {
+	XMLName xml.Name `xml:"Response"`
+	Message string
 }
 
 func createUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -228,8 +236,9 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	if activateProbe, ok := params["active"].(bool); ok {
 		if activateProbe {
 			probeScheduler.PeriodicallyPerfomProbe(*currentUser)
-		} else {
-			probeScheduler.RemovePeriodicProbe(currentUser)
+		} else if err := probeScheduler.DisablePeriodicProbe(currentUser); err != nil {
+			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -341,6 +350,88 @@ func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+}
+
+func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	rw.Header().Set("Content-Type", "text/xml")
+
+	// Validate that request is coming from twilio
+	if !twilioClient.ValidateRequest(r.URL.Path, r.PostForm, r.Header.Get("X-Twilio-Signature")) {
+		writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusUnauthorized)
+		return
+	}
+
+	user, err := models.FindUserBy("phone_number", r.PostForm.Get("From"))
+	if err != nil {
+		// No need to send response if user does not exist
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
+			return
+		}
+
+		writeErrMsgForSmsWebhook(rw, err)
+		return
+	}
+
+	probe, err := user.LastProbe()
+	if err != nil {
+		// If no probe - do nothing
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
+			return
+		}
+
+		writeErrMsgForSmsWebhook(rw, err)
+		return
+	}
+
+	pendingProbe, err := probe.IsPending()
+	if err != nil {
+		writeErrMsgForSmsWebhook(rw, err)
+		return
+	}
+
+	// If no pending probe - do nothing
+	if !pendingProbe {
+		writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
+		return
+	}
+
+	// Determine if user probe was 'good' or 'bad' from their reply i.e. message
+	probe.LastResponse = r.PostForm.Get("Body")
+	probeStatusName := probe.StatusFromLastResponse()
+
+	// if unable to determine probe status from msg - save 'LastResponse' & do nothing
+	if probeStatusName == "" {
+		probe.Save()
+		writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
+		return
+	}
+
+	probeStatus, _ := models.FindProbeStatus(probeStatusName)
+	probe.ProbeStatusID = probeStatus.ID
+	probe.Save()
+
+	msg := "👍"
+	if probeStatusName == models.BAD_PROBE {
+		msg = "Hang in there! Reaching out to your emergency contact ASAP."
+
+		// Equeue job to send out message to emergency contact
+		workerPool.Perform(work.JobParams{
+			Name:    pbscheduler.EmergencyProbeName(probe.UserID),
+			Handler: pbscheduler.SEND_EMERGENCY_PROBE_HANDLER,
+			Args: map[string]interface{}{
+				"user_id":      probe.UserID,
+				"probe_id":     probe.ID,
+				"probe_status": models.BAD_PROBE,
+			},
+			Unique: true,
+		})
+	}
+
+	msgBytes, _ := xml.Marshal(&TwilioSmsResponse{Message: msg})
+	writeSmsWebHookResponse(rw, msgBytes, http.StatusOK)
 }
 
 func logInHandler(rw http.ResponseWriter, r *http.Request) {

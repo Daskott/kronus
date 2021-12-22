@@ -13,6 +13,7 @@ import (
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/pbscheduler"
+	"github.com/Daskott/kronus/server/twilio"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/shared"
 	"github.com/go-playground/validator"
@@ -24,6 +25,7 @@ var (
 	workerPool     *work.WorkerPoolAdapter
 	authKeyPair    *key.KeyPair
 	storage        *gstorage.GStorage
+	twilioClient   *twilio.ClientWrapper
 	config         *shared.ServerConfig
 	configDir      string
 
@@ -67,7 +69,9 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	registerJobHandlers(workerPool)
 	enqueueJobs(workerPool)
 
-	probeScheduler, err = pbscheduler.NewProbeScheduler(workerPool)
+	twilioClient = twilio.NewClient(config.Twilio, config.Kronus.PublicUrl)
+
+	probeScheduler, err = pbscheduler.NewProbeScheduler(workerPool, twilioClient)
 	fatalOnError(err)
 	probeScheduler.ScheduleProbes()
 
@@ -94,8 +98,10 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")
 	adminRouter.Use(adminRouteMiddleware)
 
-	router.HandleFunc("/jwks", jwksHandler)
-	router.HandleFunc("/health", healthCheckHandler)
+	router.HandleFunc("/webhook/sms", smsWebhookHandler).Methods("POST")
+
+	router.HandleFunc("/jwks", jwksHandler).Methods("GET")
+	router.HandleFunc("/health", healthCheckHandler).Methods("GET")
 	router.HandleFunc("/login", logInHandler).Methods("POST")
 	router.Use(loggingMiddleware, initialContextMiddleware)
 

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"os"
@@ -34,6 +35,23 @@ func writeResponse(rw http.ResponseWriter, payLoad ResponsePayload, statusCode i
 
 	rw.WriteHeader(statusCode)
 	json.NewEncoder(rw).Encode(payLoad)
+}
+
+func writeErrMsgForSmsWebhook(rw http.ResponseWriter, err error) {
+	logg.Error(err)
+
+	errMsg := "Sorry an application error has occured.\nPlease try again later"
+	msgBytes, err := xml.Marshal(&TwilioSmsResponse{Message: errMsg})
+	if err != nil {
+		logg.Errorf("writeErrMsgForSmsWebhook: %v", err)
+	}
+
+	writeSmsWebHookResponse(rw, msgBytes, http.StatusOK)
+}
+
+func writeSmsWebHookResponse(rw http.ResponseWriter, body []byte, status int) {
+	rw.WriteHeader(status)
+	rw.Write(body)
 }
 
 func removeUnknownFields(args map[string]interface{}, validFields map[string]bool) {
