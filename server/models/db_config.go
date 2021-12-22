@@ -100,7 +100,7 @@ func populateDBWithSeedData() {
 
 	if err := db.First(&JobStatus{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		logg.Info("Inserting seed data into 'JobStatus'")
-		db.Create(&[]JobStatus{{Name: ENQUEUED_JOB}, {Name: IN_PROGRESS_JOB}, {Name: SUCCESSFUL_JOB}, {Name: DEAD_JOB}})
+		db.Create(&[]JobStatus{{Name: ENQUEUED_JOB}, {Name: IN_PROGRESS_JOB}, {Name: SUCCESSFUL_JOB}, {Name: DEAD_JOB}, {Name: SCHEDULED_JOB}})
 	}
 
 	if err := db.First(&Role{}).Error; errors.Is(err, gorm.ErrRecordNotFound) {

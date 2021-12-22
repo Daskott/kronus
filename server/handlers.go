@@ -245,7 +245,6 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
 		}
-
 	}
 
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)

@@ -5,6 +5,7 @@ const (
 	IN_PROGRESS_JOB = "in-progress"
 	SUCCESSFUL_JOB  = "successful"
 	DEAD_JOB        = "dead"
+	SCHEDULED_JOB   = "scheduled"
 )
 
 type JobStatus struct {

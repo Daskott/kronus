@@ -224,7 +224,9 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		}
 	}
 
-	msg := fmt.Sprintf("Are you okay %v?", strings.Title(params["first_name"].(string)))
+	msg := fmt.Sprintf("Hi %v,\n"+
+		"Just your friendly check in 🙂. Are you good ? (Y/N)",
+		strings.Title(params["first_name"].(string)))
 	err = pScheduler.sendMessage(user.PhoneNumber, msg)
 	if err != nil {
 		logg.Error(err)
@@ -262,7 +264,7 @@ func (pScheduler ProbeScheduler) sendFollowupForProbe(params map[string]interfac
 		return err
 	}
 
-	msg := fmt.Sprintf("Are you okay %v??", strings.Title(user.FirstName))
+	msg := "You good ?? (Y/N)"
 	err = pScheduler.sendMessage(user.PhoneNumber, msg)
 	if err != nil {
 		return err
