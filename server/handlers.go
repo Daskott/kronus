@@ -213,7 +213,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only activate liveliness probe for users with emergency contact
-	if _, ok := params["active"].(bool); ok && params["active"] != nil && params["active"].(bool) {
+	if enableProbe, ok := params["active"].(bool); ok && enableProbe {
 		contact, err := currentUser.EmergencyContact()
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
@@ -233,13 +233,19 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if activateProbe, ok := params["active"].(bool); ok {
-		if activateProbe {
-			probeScheduler.PeriodicallyPerfomProbe(*currentUser)
-		} else if err := probeScheduler.DisablePeriodicProbe(currentUser); err != nil {
+	// If probe request is turning on probe or updating an already active probe, re-queue the probe on the scheduler
+	// so the new changes go into effect
+	if enableProbe, ok := params["active"].(bool); currentUser.ProbeSettings.Active || (ok && enableProbe) {
+		probeScheduler.PeriodicallyPerfomProbe(*currentUser)
+	}
+
+	if enableProbe, ok := params["active"].(bool); ok && !enableProbe {
+		err := probeScheduler.DisablePeriodicProbe(currentUser)
+		if err != nil {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
 		}
+
 	}
 
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)

@@ -88,7 +88,8 @@ func serverConfig() (*shared.ServerConfig, error) {
 	config.SetDefault("google.storage.prefix", "kronus")
 	config.SetDefault("google.storage.sqliteBackupSchedule", "*/15 * * * *")
 
-	if isDevEnv {
+	// if no config file provided, use dev config
+	if isDevEnv && serverCongFile == "" {
 		config.SetConfigType("yaml")
 		if err := config.ReadConfig(bytes.NewBuffer([]byte(devConfig.SERVER_YML))); err != nil {
 			return nil, fmt.Errorf("unable to read server config file: %v", err)

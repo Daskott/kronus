@@ -13,7 +13,7 @@ const MAX_CONCURRENCY = 1
 
 type WorkerPoolAdapter struct {
 	cronScheduler *gocron.Scheduler
-	pool          WorkerPool
+	pool          workerPool
 }
 
 func NewWorkerAdapter(timeZoneArg string) *WorkerPoolAdapter {
@@ -63,8 +63,12 @@ func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 	return nil
 }
 
-// PeriodicallyPerform adds a job to the queue (to be executed)
-// periodically, based on the 'cronExpression' expression provided
+// PeriodicallyPerform adds a job to the queue periodically (to be executed),
+// based on the 'cronExpression' expression provided.
+//
+// NOTE: All enqueued jobs are unique by name.
+//if a duplicate is added, an error is logged when the internal cron scheduler tries to add it
+// the job to the job qeue.
 func (adapter *WorkerPoolAdapter) PeriodicallyPerform(cronExpression string, job JobParams) error {
 	adapter.cronScheduler.Cron(cronExpression).Tag(job.Name).
 		Do(

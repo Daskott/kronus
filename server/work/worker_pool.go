@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type WorkerPool struct {
+type workerPool struct {
 	handlers    map[string]Handler
 	workers     []*worker
 	reaper      *stuckJobsreaper
@@ -18,8 +18,8 @@ type WorkerPool struct {
 	started     bool
 }
 
-func NewWorkerPool(concurrency int) *WorkerPool {
-	wp := WorkerPool{
+func NewWorkerPool(concurrency int) *workerPool {
+	wp := workerPool{
 		handlers:    make(map[string]Handler),
 		concurrency: concurrency,
 		reaper:      NewStuckJobsReaper(),
@@ -33,7 +33,7 @@ func NewWorkerPool(concurrency int) *WorkerPool {
 }
 
 // RegisterHandler binds a name to a job handler for all workers in pool
-func (wp *WorkerPool) registerHandler(name string, handler Handler) error {
+func (wp *workerPool) registerHandler(name string, handler Handler) error {
 	if _, ok := wp.handlers[name]; ok {
 		return ErrDuplicateHandler
 	}
@@ -52,7 +52,7 @@ func (wp *WorkerPool) registerHandler(name string, handler Handler) error {
 // Enqueue adds a job to the queue(to be executed) by creating a DB record based on 'JobParams' provided.
 // Each job is unique by name. Can't have more than one job with the same name 'enqueued' or 'in-progress'
 // at the same time.
-func (wp *WorkerPool) enqueue(job JobParams) error {
+func (wp *workerPool) enqueue(job JobParams) error {
 	if strings.TrimSpace(job.Name) == "" || strings.TrimSpace(job.Handler) == "" {
 		return fmt.Errorf("both a name & handler is required for a job")
 	}
@@ -73,7 +73,7 @@ func (wp *WorkerPool) enqueue(job JobParams) error {
 }
 
 // Start starts all workers in pool & job reaper i.e the workers can start processing jobs
-func (wp *WorkerPool) start() {
+func (wp *workerPool) start() {
 	if wp.started {
 		return
 	}
@@ -87,7 +87,7 @@ func (wp *WorkerPool) start() {
 }
 
 // Stop stops all workers in pool & job reaper i.e jobs will stop being processed
-func (wp *WorkerPool) stop() {
+func (wp *workerPool) stop() {
 	if !wp.started {
 		return
 	}

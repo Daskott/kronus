@@ -47,6 +47,10 @@ func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter, msgClient *twi
 // PeriodicallyPerfomProbe creates 'liveliness probe' cron jobs for user.
 // And when each cron is triggered, the job is sent to a job to be executed.
 func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
+	// Remove the job from the worker pool & re-add it, incase the the cronExpression has been updated.
+	// This step is required because each job on the scheduler is unique by tag i.e. 'probeName', so if it's
+	// already in the scheduler, it won't get updated.
+	pbs.workerPoolAdapter.RemovePeriodicJob(probeName(user.ID))
 	pbs.workerPoolAdapter.PeriodicallyPerform(user.ProbeSettings.CronExpression, work.JobParams{
 		Name:    probeName(user.ID),
 		Handler: SEND_LIVELINESS_PROBE_HANDLER,
