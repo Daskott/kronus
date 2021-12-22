@@ -409,7 +409,12 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	probeStatus, _ := models.FindProbeStatus(probeStatusName)
+	probeStatus, err := models.FindProbeStatus(probeStatusName)
+	if err != nil {
+		writeErrMsgForSmsWebhook(rw, err)
+		return
+	}
+
 	probe.ProbeStatusID = probeStatus.ID
 	probe.Save()
 
