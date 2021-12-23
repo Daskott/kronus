@@ -26,7 +26,6 @@ var (
 type JobParams struct {
 	Name    string
 	Handler string
-	Unique  bool
 	Args    map[string]interface{}
 }
 
@@ -39,7 +38,7 @@ type worker struct {
 	sleepBackoffsInSeconds []int64
 }
 
-func NewWorker(sleepBackoffsInSeconds []int64) *worker {
+func newWorker(sleepBackoffsInSeconds []int64) *worker {
 	return &worker{
 		id:                     makeIdentifier(),
 		handlers:               make(map[string]Handler),

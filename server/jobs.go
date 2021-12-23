@@ -57,7 +57,6 @@ func enqueueJobs(wpa *work.WorkerPoolAdapter) {
 			work.JobParams{
 				Name:    "backupSqliteDb",
 				Handler: "backupSqliteDb",
-				Unique:  false,
 				Args:    map[string]interface{}{},
 			})
 	} else {

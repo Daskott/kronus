@@ -13,20 +13,20 @@ import (
 type workerPool struct {
 	handlers    map[string]Handler
 	workers     []*worker
-	reaper      *stuckJobsreaper
+	requeuer    *requeuer
 	concurrency int
 	started     bool
 }
 
-func NewWorkerPool(concurrency int) *workerPool {
+func newWorkerPool(concurrency int) *workerPool {
 	wp := workerPool{
 		handlers:    make(map[string]Handler),
 		concurrency: concurrency,
-		reaper:      NewStuckJobsReaper(),
+		requeuer:    newRequeuer(),
 	}
 
 	for i := 0; i < concurrency; i++ {
-		wp.workers = append(wp.workers, NewWorker([]int64{0, 10, 30, 60, 100, 120}))
+		wp.workers = append(wp.workers, newWorker([]int64{0, 10, 30, 60, 100, 120}))
 	}
 
 	return &wp
@@ -83,7 +83,7 @@ func (wp *workerPool) start() {
 		go worker.start()
 	}
 
-	wp.reaper.start()
+	wp.requeuer.start()
 }
 
 // stop stops all workers in pool & job reaper i.e jobs will stop being processed
@@ -103,5 +103,5 @@ func (wp *workerPool) stop() {
 	wg.Wait()
 	wp.started = false
 
-	wp.reaper.stop()
+	wp.requeuer.stop()
 }

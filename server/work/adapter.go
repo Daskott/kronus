@@ -19,7 +19,7 @@ type WorkerPoolAdapter struct {
 func NewWorkerAdapter(timeZoneArg string) *WorkerPoolAdapter {
 	return &WorkerPoolAdapter{
 		cronScheduler: cron.NewCronScheduler(timeZoneArg),
-		pool:          *NewWorkerPool(MAX_CONCURRENCY),
+		pool:          *newWorkerPool(MAX_CONCURRENCY),
 	}
 }
 

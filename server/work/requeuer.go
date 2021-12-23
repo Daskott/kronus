@@ -9,27 +9,27 @@ import (
 	"gorm.io/gorm"
 )
 
-type stuckJobsreaper struct {
+type requeuer struct {
 	stopChan chan struct{}
 }
 
-func NewStuckJobsReaper() *stuckJobsreaper {
-	return &stuckJobsreaper{
+func newRequeuer() *requeuer {
+	return &requeuer{
 		stopChan: make(chan struct{}),
 	}
 }
 
-// Start starts the reaper loop that pulls jobs from 'in-progress'
+// Start starts the requeuer loop that pulls jobs from 'in-progress'
 // that are stuck(i.e stayed too long in-progress) and requeue them
-func (r *stuckJobsreaper) start() {
+func (r *requeuer) start() {
 	go r.loop()
 }
 
-func (r *stuckJobsreaper) stop() {
+func (r *requeuer) stop() {
 	r.stopChan <- struct{}{}
 }
 
-func (r *stuckJobsreaper) loop() {
+func (r *requeuer) loop() {
 	var stuckJob *models.Job
 	var err error
 
@@ -37,11 +37,11 @@ func (r *stuckJobsreaper) loop() {
 	rateLimiter := time.NewTicker(DefaultTickerDuration)
 	defer rateLimiter.Stop()
 
-	logg.Infof("Starting job reaper")
+	logg.Infof("Starting job requeuer")
 	for {
 		select {
 		case <-r.stopChan:
-			logg.Infof("Stopping job reaper")
+			logg.Infof("Stopping job requeuer")
 			return
 		case <-rateLimiter.C:
 			stuckJob, err = models.LastJobLastUpdated(30, models.IN_PROGRESS_JOB)
@@ -68,7 +68,7 @@ func (r *stuckJobsreaper) loop() {
 	}
 }
 
-func (r *stuckJobsreaper) requeue(job *models.Job) {
+func (r *requeuer) requeue(job *models.Job) {
 	jobStatus, err := models.FindJobStatus(models.ENQUEUED_JOB)
 	if err != nil {
 		logg.Error(err)
@@ -87,12 +87,12 @@ func (r *stuckJobsreaper) requeue(job *models.Job) {
 	r.logInfof("job with id=%v requeued", job.ID)
 }
 
-func (r *stuckJobsreaper) logInfof(template string, args ...interface{}) {
-	prefix := colors.Yellow("[job reaper] ")
+func (r *requeuer) logInfof(template string, args ...interface{}) {
+	prefix := colors.Yellow("[job requeuer] ")
 	logg.Infof(prefix+template, args...)
 }
 
-func (r *stuckJobsreaper) logError(args ...interface{}) {
-	prefix := colors.Red("[job reaper] ")
+func (r *requeuer) logError(args ...interface{}) {
+	prefix := colors.Red("[job requeuer] ")
 	logg.Errorf(prefix, args...)
 }

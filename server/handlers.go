@@ -436,7 +436,6 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 				"probe_id":     probe.ID,
 				"probe_status": models.BAD_PROBE,
 			},
-			Unique: true,
 		})
 	}
 

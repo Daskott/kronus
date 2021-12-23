@@ -58,7 +58,6 @@ func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
 			"first_name": user.FirstName,
 			"last_name":  user.LastName,
 		},
-		Unique: true,
 	})
 }
 
@@ -107,7 +106,6 @@ func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
 		Name:    ENQUEUE_FOLLOWUP_PROBES_HANDLER,
 		Handler: ENQUEUE_FOLLOWUP_PROBES_HANDLER,
 		Args:    map[string]interface{}{},
-		Unique:  true,
 	})
 }
 
@@ -132,7 +130,6 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 				Name:    EmergencyProbeName(probe.UserID),
 				Handler: SEND_EMERGENCY_PROBE_HANDLER,
 				Args:    jobArgs,
-				Unique:  true,
 			})
 
 			if err != nil {
@@ -158,7 +155,6 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 			Name:    followupProbeName(probe.UserID),
 			Handler: SEND_FOLLOWUP_PROBE_HANDLER,
 			Args:    jobArgs,
-			Unique:  true,
 		})
 
 		if err != nil {
