@@ -34,6 +34,8 @@ sqlite:
 google:
   storage:
     bucket: "gstorage-bucket-name"
+
+    # The folder/path to store backup files
     prefix: "kronus"
     
     # How often you want your sqlite db to be backed up to google storage in cron format
@@ -83,9 +85,11 @@ kronus server --config=/config.yml
 }
 ```
 
-- `PUT` **/users/{uid}/probe_settings/** set to `true/false` to enable/disable probe
+- `PUT` **/users/{uid}/probe_settings/** set `day` and `time` of the week to receive probe messages & use `active` to enable/disable probe.
 ```json
 {
+    "day": "fri",
+    "time": "22:00",
     "active": true
 }
 ```
@@ -127,9 +131,12 @@ kronus server --config=/config.yml
 ## FAQ
 - Q: Where's all the data stored ?
     - A: SQLite file
+
 - Q: Why SQLite ?
     - A: For ease of use as you don't require a lot of external systems to set the kronus server up. Also the SQLite file is encrypted using the provided `passPhrase` with AES-256 see https://github.com/sqlcipher/sqlcipher.
+
 - Q: Is this a dead man's switch ?
     - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
+
 - Q: Why ?
     - A: Why not ? It was/is a fun project to learn more `Go` and design/architecture patterns
