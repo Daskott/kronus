@@ -1,33 +1,42 @@
 # Kronus
-A CLI App to help you stay in touch with the people that matter by leveraging the [google calender API](https://developers.google.com/calendar/api/guides/overview).
-You can create `touchbase` events for contacts in any group, up to a Max of **7** contacts.
+A CLI App to help you stay in touch with your contacts, as well as yourself 🙃. The two main features/cmd:
+- `touchbase` 
+  - create recurring google events as a reminder to reach out to contacts
+  - You can create `touchbase` events for contacts in any group, up to a Max of **7** contacts.
+- `server` 
+  - enables liveliness probe for users on the server. It's still in pre-alpha, so a lot can change about it's implementation & features
+  - [See doc](Server.md) if you want to test out this feature.
+
 ```
-  kronus is a CLI library for Go that allows you to create
-  coffee chat appointments with your contacts.
+kronus is a CLI library for Go that allows you to create
+appointments to check in with your contacts and also yourself(i.e liveliness probe).
 
-  The application is a tool to generate recurring google calender events for each of your contacts,
-  to remind you to reach out and see how they are doing :)
+To keep in touch with contacts, kronus enables you to generate recurring google calender events for each of your contacts,
+to remind you to reach out and see how they are doing.
 
-  Usage:
-    kronus [command]
+And to checkup on yourself, kronus allows you to schedule a liveliness probe that sends out a message to you every week
+via kronus server.
 
-  Available Commands:
-    completion  generate the autocompletion script for the specified shell
-    help        Help about any command
-    touchbase   Deletes previous touchbase events and creates new ones based on configs
+Usage:
+  kronus [command]
 
-  Flags:
-      --config string   config file (default is $HOME/.kronus.yaml)
-      --dev             run in development mode
-  -h, --help            help for kronus
-      --test            run in test mode
-  -t, --toggle          Help message for toggle
-  -v, --version         version for kronus
+Available Commands:
+  completion  generate the autocompletion script for the specified shell
+  help        Help about any command
+  server      Start a kronus server (pre-alpha)
+  touchbase   Deletes previous touchbase events and creates new ones based on configs
 
-  Use "kronus [command] --help" for more information about a command.
+Flags:
+      --dev       run in development mode
+  -h, --help      help for kronus
+      --test      run in test mode
+  -t, --toggle    Help message for toggle
+  -v, --version   version for kronus
+
+Use "kronus [command] --help" for more information about a command.
   ```
 
-## Pre-requisite
+## Pre-requisite for touchbase cmd
 - Install [Go](https://golang.org/dl/)
 - Create a google cloud project with permission to access google calendar. [See docs](https://cloud.google.com/resource-manager/docs/creating-managing-projects)
 - Create a service account to use with app. [See docs](https://cloud.google.com/iam/docs/creating-managing-service-accounts)
@@ -46,25 +55,25 @@ You can create `touchbase` events for contacts in any group, up to a Max of **7*
 - For help run `kronus touchbase --help`
   ```
   Deletes previous touchbase google calender events created by kronus
-        and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml
+  and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml
 
   Usage:
     kronus touchbase [flags]
 
   Flags:
-  -c, --count int          how many times you want to touchbase with members of a group (default 4)
-  -f, --freq int           how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly (default 1)
-  -g, --group string       group to create touchbase events for
-  -h, --help               help for touchbase
-  -t, --time-slot string   time slot in the day allocated for touching base (default "18:00-18:30")
+        --config string      config file (default is $HOME/.kronus.yaml)
+    -c, --count int          how many times you want to touchbase with members of a group (default 4)
+    -f, --freq int           how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly (default 1)
+    -g, --group string       group to create touchbase events for
+    -h, --help               help for touchbase
+    -t, --time-slot string   time slot in the day allocated for touching base (default "18:00-18:30")
 
   Global Flags:
-        --config string   config file (default is $HOME/.kronus.yaml)
-        --dev             run in development mode
-        --test            run in test mode
+        --dev    run in development mode
+        --test   run in test mode
   ```
 
-## Configuration
+## Configuration for `touchbase` cmd
 The config file is created in `$HOME/.kronus.yaml` if you've run the App at least once.
 
 You can also create the config file manually in the default path if you choose. Or a new path & tell `kronus` where to find it using the `--config` flag.

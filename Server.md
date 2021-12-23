@@ -133,7 +133,7 @@ kronus server --config=/config.yml
     - A: SQLite file
 
 - Q: Why SQLite ?
-    - A: For ease of use as you don't require a lot of external systems to set the kronus server up. Also the SQLite file is encrypted using the provided `passPhrase` with AES-256 see https://github.com/sqlcipher/sqlcipher.
+    - A: For ease of use as you don't require a lot of external systems to set the kronus server up. Also the SQLite file is encrypted using the provided `passPhrase` with AES-256, see https://github.com/sqlcipher/sqlcipher.
 
 - Q: Is this a dead man's switch ?
     - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
