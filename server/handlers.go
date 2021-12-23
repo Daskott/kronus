@@ -357,6 +357,75 @@ func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
+func fetchContactsHandler(rw http.ResponseWriter, r *http.Request) {
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
+	err := currentUser.LoadContacts()
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser.Contacts}, http.StatusOK)
+}
+
+func jobsStatsHandler(rw http.ResponseWriter, r *http.Request) {
+	stats, err := models.CurrentJobsStats()
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: stats}, http.StatusOK)
+}
+
+func probeStatsHandler(rw http.ResponseWriter, r *http.Request) {
+	stats, err := models.CurrentProbeStats()
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: stats}, http.StatusOK)
+}
+
+func jobsByStatusHandler(rw http.ResponseWriter, r *http.Request) {
+	status := strings.ToLower(r.URL.Query().Get("status"))
+	if !models.JobStatusNameMap[status] {
+		writeResponse(rw, ResponsePayload{Errors: []string{
+			fmt.Sprintf("a valid 'status' param is required i.e. %v, %v, %v or %v",
+				models.ENQUEUED_JOB, models.SUCCESSFUL_JOB, models.IN_PROGRESS_JOB, models.DEAD_JOB)},
+		}, http.StatusBadRequest)
+		return
+	}
+
+	jobs, err := models.JobsByStatus(status)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: jobs}, http.StatusOK)
+}
+
+func probesByStatusHandler(rw http.ResponseWriter, r *http.Request) {
+	status := strings.ToLower(r.URL.Query().Get("status"))
+	if !models.ProbeStatusNameMap[status] {
+		writeResponse(rw, ResponsePayload{Errors: []string{
+			fmt.Sprintf("a valid 'status' param is required i.e. %v, %v, %v %v, or %v",
+				models.PENDING_PROBE, models.GOOD_PROBE, models.BAD_PROBE, models.CANCELLED_PROBE, models.UNAVAILABLE_PROBE)},
+		}, http.StatusBadRequest)
+		return
+	}
+
+	probes, err := models.ProbesByStatus(status, "desc")
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: probes}, http.StatusOK)
+}
+
 func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	rw.Header().Set("Content-Type", "text/xml")

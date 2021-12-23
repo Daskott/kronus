@@ -7,6 +7,6 @@ type Contact struct {
 	PhoneNumber        string           `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
 	Email              string           `json:"email" validate:"required,email" gorm:"unique"`
 	IsEmergencyContact bool             `json:"is_emergency_contact"`
-	UserID             uint             `gorm:"not null"`
-	EmergencyProbes    []EmergencyProbe `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	UserID             uint             `json:"user_id" gorm:"not null"`
+	EmergencyProbes    []EmergencyProbe `json:"emergency_probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }

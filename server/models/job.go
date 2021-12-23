@@ -13,13 +13,13 @@ var (
 
 type Job struct {
 	BaseModel
-	Fails       int
-	Name        string
-	Handler     string
-	Args        string
-	LastError   string
-	Claimed     bool `gorm:"default:false"`
-	JobStatusID uint
+	Fails       int    `json:"fails"`
+	Name        string `json:"name"`
+	Handler     string `json:"handler"`
+	Args        string `json:"args"`
+	LastError   string `json:"last_error"`
+	Claimed     bool   `json:"claimed" gorm:"default:false"`
+	JobStatusID uint   `json:"job_status_id"`
 }
 
 func (job *Job) MarkAsClaimed() (bool, error) {
@@ -83,14 +83,9 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 }
 
 func LastJob(status string, claimed bool) (*Job, error) {
-	enqueuedJobStatus := JobStatus{}
-	err := db.Where(&JobStatus{Name: status}).Find(&enqueuedJobStatus).Error
-	if err != nil {
-		return nil, err
-	}
-
 	job := Job{}
-	err = db.Where("job_status_id = ? AND claimed = ?", enqueuedJobStatus.ID, claimed).Last(&job).Error
+	err := db.Joins("INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id AND job_statuses.name = ? AND claimed = ? ",
+		status, claimed).Last(&job).Error
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +93,48 @@ func LastJob(status string, claimed bool) (*Job, error) {
 	return &job, nil
 }
 
-// LastJobOlderThan returns the last job which was last updated 'arg1' minutes ago
+func JobsByStatus(status string) ([]Job, error) {
+	jobs := []Job{}
+
+	// TODO: Add pagination
+	err := db.Limit(500).
+		Order("jobs.id desc").Joins("INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id AND job_statuses.name = ?", status).
+		Find(&jobs).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
+func CurrentJobsStats() (*JobsStats, error) {
+	const JOIN_QUERY = "INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id AND job_statuses.name = ?"
+	stats := JobsStats{}
+
+	err := db.Joins(JOIN_QUERY, ENQUEUED_JOB).Model(&Job{}).Count(&stats.EnueuedJobCount).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, IN_PROGRESS_JOB).Model(&Job{}).Count(&stats.InProgressJobCount).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, SUCCESSFUL_JOB).Model(&Job{}).Count(&stats.SuccessfulJobCount).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, DEAD_JOB).Model(&Job{}).Count(&stats.DeadJobCount).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
+// LastJobLastUpdated returns the last job which was last updated 'arg1' minutes ago
 // and is of 'arg2' status.
 // i.e last record where job.updated_at + 'arg1' minutes <= 'now'.
 //

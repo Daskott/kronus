@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,11 +11,11 @@ import (
 
 type Probe struct {
 	BaseModel
-	LastResponse   string
-	RetryCount     int
-	EmergencyProbe EmergencyProbe
-	UserID         uint `gorm:"not null"`
-	ProbeStatusID  uint
+	LastResponse   string         `json:"last_response"`
+	RetryCount     int            `json:"retry_count"`
+	EmergencyProbe EmergencyProbe `json:"emergency_probe"`
+	UserID         uint           `json:"user_id" gorm:"not null"`
+	ProbeStatusID  uint           `json:"probe_status_id"`
 }
 
 var ProbeStatusMapToResponse = map[string]map[string]bool{
@@ -72,18 +73,18 @@ func SetProbeStatus(probeID interface{}, status string) error {
 	return nil
 }
 
-func ProbesByStatus(status string) ([]Probe, error) {
+func ProbesByStatus(status, order string) ([]Probe, error) {
 	probes := []Probe{}
 
-	err := db.Joins(
+	err := db.Preload("EmergencyProbe").Limit(500).Order(fmt.Sprintf("probes.id %v", order)).Joins(
 		"INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?", status).
 		Find(&probes).Error
 
-	if err != nil {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
-	return probes, err
+	return probes, nil
 }
 
 func FindProbe(id interface{}) (*Probe, error) {
@@ -110,4 +111,36 @@ func CreateProbe(userID interface{}) error {
 		"created_at":      currentTime,
 		"updated_at":      currentTime,
 	}).Error
+}
+
+func CurrentProbeStats() (*ProbeStats, error) {
+	const JOIN_QUERY = "INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?"
+	stats := ProbeStats{}
+
+	err := db.Joins(JOIN_QUERY, PENDING_PROBE).Model(&Probe{}).Count(&stats.PendingProbeCount).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, GOOD_PROBE).Model(&Probe{}).Count(&stats.GoodProbeCount).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, BAD_PROBE).Model(&Probe{}).Count(&stats.BadProbeCount).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, CANCELLED_PROBE).Model(&Probe{}).Count(&stats.CancelledProbeCount).Error
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.Joins(JOIN_QUERY, UNAVAILABLE_PROBE).Model(&Probe{}).Count(&stats.UnavailableProbeCount).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
 }
