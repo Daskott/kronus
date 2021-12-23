@@ -40,7 +40,7 @@ google:
     # How often you want your sqlite db to be backed up to google storage in cron format
     sqliteBackupSchedule: "0 * * * *"
 
-    enableSqliteBackupAndSync: false
+    enableSqliteBackupAndSync: true
   applicationCredentials: "/path/to/google/credentials"
 
 twilio:
@@ -72,7 +72,7 @@ For now the only way to interact with the server resources is via the rest api:
 ```json
 {
     "email": "stark@avengers.com",
-    "password": "1234"
+    "password": "very-secure"
 }
 ```
 - `POST` **/users/{uid}/contacts/** - For protected routes, the token from the provious step needs to be added to the `Authorization` header as `Bearer <TOKEN>`
@@ -102,12 +102,12 @@ For now the only way to interact with the server resources is via the rest api:
     - `POST` **/webhook/sms** - for twilio message webhook
     - `GET` **/jwks** - for validating kronus server jwts
     - `GET` **/health** - to check service health
-    - `GET` **/users/{uid:[0-9]+}** - Can only GET your own record, except if you're admin
-    - `PUT` **/users/{uid:[0-9]+}** - Can only UPDATE own record
-    - `DELETE` **/users/{uid:[0-9]+}** - Can only DELETE your own record, except if you're admin
-    - `GET` **/users/{uid:[0-9]+}/contacts**
-    - `PUT` **/users/{uid:[0-9]+}/contacts/{id:[0-9]+}** - UPDATE contact
-    - `DELETE` **/users/{uid:[0-9]+}/contacts/{id:[0-9]+}**
+    - `GET` **/users/{uid}** - Can only GET your own record, except if you're admin
+    - `PUT` **/users/{uid}** - Can only UPDATE own record
+    - `DELETE` **/users/{uid}** - Can only DELETE your own record, except if you're admin
+    - `GET` **/users/{uid}/contacts**
+    - `PUT` **/users/{uid}/contacts/{id}** - UPDATE contact
+    - `DELETE` **/users/{uid}/contacts/{id}**
 
 ## Design Concepts
 
