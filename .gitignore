@@ -15,5 +15,10 @@ todo.md
 
 .kronus.dev.yaml
 
+
+# Sqlite files in dev env
+dev/db/
+dev/config/server.yml
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
