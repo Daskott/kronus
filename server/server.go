@@ -69,7 +69,7 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	registerJobHandlers(workerPool)
 	enqueueJobs(workerPool)
 
-	twilioClient = twilio.NewClient(config.Twilio, config.Kronus.PublicUrl)
+	twilioClient = twilio.NewClient(config.Twilio, config.Kronus.PublicUrl, devMode)
 
 	probeScheduler, err = pbscheduler.NewProbeScheduler(workerPool, twilioClient)
 	fatalOnError(err)

@@ -21,9 +21,9 @@ google:
   applicationCredentials: 
 
 twilio:
-  accountSid:
-  authToken:
-  messagingServiceSid:
+  accountSid: none
+  authToken: none
+  messagingServiceSid: none
 `
 
 const DEFAULT_TOUCHBASE_YML = `

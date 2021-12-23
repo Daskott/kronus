@@ -26,13 +26,13 @@ func NewWorkerPool(concurrency int) *workerPool {
 	}
 
 	for i := 0; i < concurrency; i++ {
-		wp.workers = append(wp.workers, NewWorker([]int64{0, 10, 100, 120}))
+		wp.workers = append(wp.workers, NewWorker([]int64{0, 10, 30, 60, 100, 120}))
 	}
 
 	return &wp
 }
 
-// RegisterHandler binds a name to a job handler for all workers in pool
+// registerHandler binds a name to a job handler for all workers in pool
 func (wp *workerPool) registerHandler(name string, handler Handler) error {
 	if _, ok := wp.handlers[name]; ok {
 		return ErrDuplicateHandler
@@ -49,7 +49,7 @@ func (wp *workerPool) registerHandler(name string, handler Handler) error {
 	return nil
 }
 
-// Enqueue adds a job to the queue(to be executed) by creating a DB record based on 'JobParams' provided.
+// enqueue adds a job to the queue(to be executed) by creating a DB record based on 'JobParams' provided.
 // Each job is unique by name. Can't have more than one job with the same name 'enqueued' or 'in-progress'
 // at the same time.
 func (wp *workerPool) enqueue(job JobParams) error {
@@ -72,7 +72,7 @@ func (wp *workerPool) enqueue(job JobParams) error {
 	return nil
 }
 
-// Start starts all workers in pool & job reaper i.e the workers can start processing jobs
+// start starts all workers in pool & job reaper i.e the workers can start processing jobs
 func (wp *workerPool) start() {
 	if wp.started {
 		return
@@ -86,7 +86,7 @@ func (wp *workerPool) start() {
 	wp.reaper.start()
 }
 
-// Stop stops all workers in pool & job reaper i.e jobs will stop being processed
+// stop stops all workers in pool & job reaper i.e jobs will stop being processed
 func (wp *workerPool) stop() {
 	if !wp.started {
 		return

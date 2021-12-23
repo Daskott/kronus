@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Daskott/kronus/colors"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/twilio"
@@ -148,10 +147,10 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 		// up until max-retries. So the user has enough time to respond
 		//
 		// E.g sendInitialProbe @ 5:OOpm
-		// Follow up 1 will be @ ~6:00pm i.e (retryCount+1)hours where retryCount = 0
-		// Follow up 2 will be @ ~8:00pm i.e (retryCount+1)hours where retryCount = 1
-		// Follow up 3 will be @ ~11:00pm i.e (retryCount+1)hours where retryCount = 2
-		if time.Since(probe.UpdatedAt) < time.Duration(probe.RetryCount+1)*time.Hour {
+		// Follow up 1 will be @ ~6:00pm
+		// Follow up 2 will be @ ~7:00pm
+		// Follow up 3 will be @ ~8:00pm
+		if time.Since(probe.UpdatedAt) < 1*time.Hour {
 			continue
 		}
 
@@ -176,13 +175,7 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 }
 
 func (pScheduler ProbeScheduler) sendMessage(to, msg string) error {
-	err := pScheduler.messageClient.SendMessage(to, msg)
-	if err != nil {
-		return err
-	}
-
-	logg.Infof(fmt.Sprintf("%v %v", colors.Green("[message]"), msg))
-	return nil
+	return pScheduler.messageClient.SendMessage(to, msg)
 }
 
 // ---------------------------------------------------------------------------------//
