@@ -99,14 +99,14 @@ For now the only way to interact with the server resources is via the rest api:
     - `GET` **/probes/stats**
     - `GET` **/probes?status=***
 - Other routes
-    - `POST` **/webhook/sms** - for twilio message webhook
-    - `GET` **/jwks** - for validating kronus server jwts
-    - `GET` **/health** - to check service health
+    - `POST` **/webhook/sms** - For twilio message webhook
+    - `GET` **/jwks** - For validating kronus server jwts
+    - `GET` **/health** - To check service health
     - `GET` **/users/{uid}** - Can only GET your own record, except if you're admin
     - `PUT` **/users/{uid}** - Can only UPDATE own record
     - `DELETE` **/users/{uid}** - Can only DELETE your own record, except if you're admin
     - `GET` **/users/{uid}/contacts**
-    - `PUT` **/users/{uid}/contacts/{id}** - UPDATE contact
+    - `PUT` **/users/{uid}/contacts/{id}**
     - `DELETE` **/users/{uid}/contacts/{id}**
 
 ## Design Concepts
