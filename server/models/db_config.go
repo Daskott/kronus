@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
+	sqliteEncrypt "github.com/Daskott/gorm-sqlite-cipher"
 	"github.com/Daskott/kronus/server/gstorage"
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/utils"
-	sqliteEncrypt "github.com/jackfr0st13/gorm-sqlite-cipher"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
 )
@@ -20,7 +20,7 @@ const DB_NAME = "kronus.db"
 var logg = logger.NewLogger()
 var db *gorm.DB
 
-// InitAndAutoMigrate does 4 things to initialize the database
+// InitialiazeDb does 4 things to initialize the database
 //
 // - download sqlite backup db if backup is enabled to blob storage
 //
@@ -41,11 +41,14 @@ func InitialiazeDb(passPhrase string, dbRootDir string, storage *gstorage.GStora
 		return err
 	}
 
-	db.AutoMigrate(
+	err = db.AutoMigrate(
 		&ProbeStatus{}, &JobStatus{}, &Job{},
 		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
 		&User{}, &EmergencyProbe{},
 	)
+	if err != nil {
+		return err
+	}
 
 	populateDBWithSeedData()
 

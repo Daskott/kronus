@@ -4,11 +4,11 @@ go 1.17
 
 require (
 	cloud.google.com/go/storage v1.10.0
+	github.com/Daskott/gorm-sqlite-cipher v0.2.1
 	github.com/fatih/color v1.13.0
 	github.com/go-co-op/gocron v1.10.0
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/gorilla/mux v1.8.0
-	github.com/jackfr0st13/gorm-sqlite-cipher v0.1.0
 	github.com/lestrrat-go/jwx v1.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.2.1
