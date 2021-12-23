@@ -47,8 +47,9 @@ func init() {
 func createServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
-		Short: "Start a kronus server",
-		Long:  `The kronus server houses functionality for liveliness probes(aka dead man's switch)`,
+		Short: "Start a kronus server (pre-alpha)",
+		Long: `The kronus server enables functionality for liveliness probes.
+It's currently in pre-alpha stage.`,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			if isDevEnv {
 				return
