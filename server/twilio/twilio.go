@@ -46,7 +46,7 @@ func (cw *ClientWrapper) SendMessage(to, msg string) error {
 
 	// Only log messages to stdout in devMode
 	if cw.devMode {
-		logg.Infof(fmt.Sprintf("%v to: %v\n%v", colors.Green("[message client]"), to, msg))
+		logg.Infof(fmt.Sprintf("%v to: %v; body: %v", colors.Green("[message]"), to, msg))
 		return nil
 	}
 
@@ -59,7 +59,7 @@ func (cw *ClientWrapper) SendMessage(to, msg string) error {
 		return fmt.Errorf(*resp.ErrorMessage)
 	}
 
-	logg.Infof(fmt.Sprintf("%v new mesasge sent!", colors.Green("[message client]")))
+	logg.Infof(fmt.Sprintf("%v new mesasge sent!", colors.Green("[message]")))
 
 	return nil
 }
