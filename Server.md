@@ -9,7 +9,6 @@ Kronus server allows you to schedule a liveliness probe for users on the server 
 ### Dependcies
 - Google cloud storage credentials - (Optional - for db backup)
 - Twilio account - for sending probe messages
-- SQlite
 
 ### Server Config
 The server requires a valid `/config.yml` configuration file as shown below:
@@ -54,9 +53,7 @@ twilio:
 kronus server --config=/config.yml
 ```
 
-### Usage
-For now the only way to interact with the server resources is via the rest api:
-
+### API and Usage
 - `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
 ```json
 {
@@ -93,29 +90,46 @@ For now the only way to interact with the server resources is via the rest api:
 }
 ```
 - Admin only routes
-    - `GET` **/users**
-    - `GET` **/jobs/stats**
-    - `GET` **/jobs?status=***
-    - `GET` **/probes/stats**
-    - `GET` **/probes?status=***
+
+    | Method | Route | Note |
+    | --- | --- | --- |
+    | `GET` | **/users** | Fetch all users |
+    | `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` |
+    | `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` |
+    | `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable`|
+    | `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` |
+
 - Other routes
-    - `POST` **/webhook/sms** - For twilio message webhook
-    - `GET` **/jwks** - For validating kronus server jwts
-    - `GET` **/health** - To check service health
-    - `GET` **/users/{uid}** - Can only GET your own record, except if you're admin
-    - `PUT` **/users/{uid}** - Can only UPDATE own record
-    - `DELETE` **/users/{uid}** - Can only DELETE your own record, except if you're admin
-    - `GET` **/users/{uid}/contacts**
-    - `PUT` **/users/{uid}/contacts/{id}**
-    - `DELETE` **/users/{uid}/contacts/{id}**
+
+    | Method | Route | Note |
+    | --- | --- | --- |
+    | `POST` | **/webhook/sms** | For twilio message webhook |
+    | `GET` | **/jwks** | For validating kronus server jwts |
+    | `GET` | **/health** | To check service health |
+    | `GET` | **/users/{uid}**| Can only GET your own record, except if you're admin |
+    | `PUT` |**/users/{uid}**| Can only UPDATE own record |
+    | `DELETE` |**/users/{uid}**| Can only DELETE your own record, except if you're admin |
+    | `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
+    | `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
+    | `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
 
 ## Design Concepts
+### Probes
+- Probes are events used to identify when a user has been contacted by the service to check on their aliveness.
+- A probe can be in 5 possible states: 
+    - `pending` - The server has sent out a probe message to the user & is awaiting a response e.g. `"Are you okay Stark?"`
+    - `good` - The server has gotten a valid response for good i.e `Yes`, `Yeah`, `Yh` or `Y`
+    - `bad` - The server has gotten a valid response for bad i.e `No`, `Nope`, `Nah` or `N`
+    - `cancelled` - The probe was cancelled by the user via the rest API
+    - `unavailable` - The server did not receive any response after multiple retries i.e `"You good ?"`
+- In both a `bad` or `unavailable` state the server sends out a message to the user's emergency contact and then disables the probe.
 
 ## FAQ
-- Q: What is a liveliness probe ?
-    - A: It's just a fancy way of saying the server `pings` it's humans to check that they are alive & doing okay. If the server determine's all's good, nothing happens.
-    
-    - However, if the server determines all's not good or doesn't receive any valid response after a ping, a message is sent to the user's emergency contact and the liveliness probe is turned off.
-
+- Q: Where's all the data stored ?
+    - A: SQLite file
+- Q: Why SQLite ?
+    - A: For ease of use as you don't require a lot of external systems to set the kronus server up. Also the SQLite file is encrypted using the provided `passPhrase` with AES-256 see https://github.com/sqlcipher/sqlcipher.
+- Q: Is this a dead man's switch ?
+    - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
 - Q: Why ?
-    - A: Why not ?
+    - A: Why not ? It was/is a fun project to learn more `Go` and design/architecture patterns
