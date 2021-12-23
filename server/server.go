@@ -90,12 +90,18 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/probe_settings", updateProbeSettingsHandler).Methods("PUT")
 
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts", fetchContactsHandler).Methods("GET")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts", createContactHandler).Methods("POST")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts/{id:[0-9]+}", updateContactHandler).Methods("PUT")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts/{id:[0-9]+}", deleteUserContactHandler).Methods("DELETE")
 	protectedRouter.Use(protectedRouteMiddleware)
 
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")
+
+	adminRouter.HandleFunc("/jobs", jobsByStatusHandler).Methods("GET")
+	adminRouter.HandleFunc("/jobs/stats", jobsStatsHandler).Methods("GET")
+	adminRouter.HandleFunc("/probes/stats", probeStatsHandler).Methods("GET")
+	adminRouter.HandleFunc("/probes", probesByStatusHandler).Methods("GET")
 	adminRouter.Use(adminRouteMiddleware)
 
 	router.HandleFunc("/webhook/sms", smsWebhookHandler).Methods("POST")

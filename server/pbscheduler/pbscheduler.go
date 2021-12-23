@@ -111,7 +111,7 @@ func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
 
 func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]interface{}) error {
 	noOfFollowupProbeJobsQueued := 0
-	probes, err := models.ProbesByStatus(models.PENDING_PROBE)
+	probes, err := models.ProbesByStatus(models.PENDING_PROBE, "")
 	if err != nil {
 		logg.Error(err)
 		return nil

@@ -115,6 +115,11 @@ func (user *User) AddContact(contact *Contact) error {
 	return db.Create(contact).Error
 }
 
+func (user *User) LoadContacts() error {
+	// TODO: Add pagination
+	return db.Limit(500).Find(&user.Contacts, "user_id = ?", user.ID).Error
+}
+
 func (user *User) UpdateContact(contactID string, data map[string]interface{}) error {
 	return db.Table("contacts").Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
 }
