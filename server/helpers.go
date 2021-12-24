@@ -94,7 +94,7 @@ func probeSettingFieldsFromParams(params map[string]interface{}) map[string]inte
 
 	// Set value of cron expression to be stored (if time or day is provided)
 	if params["time"] != nil || params["day"] != nil {
-		derivedCronExpression = fmt.Sprintf("%v */%v * * %v", cronMinute, cronHour, cronDay)
+		derivedCronExpression = fmt.Sprintf("%v %v * * %v", cronMinute, cronHour, cronDay)
 	}
 
 	if derivedCronExpression != "" {
