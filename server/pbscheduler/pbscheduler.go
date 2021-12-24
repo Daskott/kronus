@@ -46,19 +46,20 @@ func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter, msgClient *twi
 // PeriodicallyPerfomProbe creates 'liveliness probe' cron jobs for user.
 // And when each cron is triggered, the job is sent to a job to be executed.
 func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
-	// Remove the job from the worker pool & re-add it, incase the the cronExpression has been updated.
-	// This step is required because each job on the scheduler is unique by tag i.e. 'probeName', so if it's
-	// already in the scheduler, it won't get updated.
-	pbs.workerPoolAdapter.RemovePeriodicJob(probeName(user.ID))
-	pbs.workerPoolAdapter.PeriodicallyPerform(user.ProbeSettings.CronExpression, work.JobParams{
-		Name:    probeName(user.ID),
-		Handler: SEND_LIVELINESS_PROBE_HANDLER,
-		Args: map[string]interface{}{
-			"user_id":    user.ID,
-			"first_name": user.FirstName,
-			"last_name":  user.LastName,
-		},
-	})
+	// Try updating the user's probe job schedule if one is already running
+	// Else add a new one to the the scheduler
+	err := pbs.workerPoolAdapter.UpdateJobScheduleByTag(probeName(user.ID), user.ProbeSettings.CronExpression)
+	if err == work.ErrJobNotFoundInCronSch {
+		pbs.workerPoolAdapter.PeriodicallyPerform(user.ProbeSettings.CronExpression, work.JobParams{
+			Name:    probeName(user.ID),
+			Handler: SEND_LIVELINESS_PROBE_HANDLER,
+			Args: map[string]interface{}{
+				"user_id":    user.ID,
+				"first_name": user.FirstName,
+				"last_name":  user.LastName,
+			},
+		})
+	}
 }
 
 // DisablePeriodicProbe removes probe from scheduler & disables probe in user settings
@@ -184,12 +185,7 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
-	enabled, err := user.IsProbeEnabled()
-	if err != nil {
-		return err
-	}
-
-	if !enabled {
+	if !user.ProbeSettings.Active {
 		logg.Infof("skipping liveliness probe for userID=%v, it's currently disabled", params["user_id"])
 		return nil
 	}
@@ -238,12 +234,7 @@ func (pScheduler ProbeScheduler) sendFollowupForProbe(params map[string]interfac
 		return err
 	}
 
-	enabled, err := user.IsProbeEnabled()
-	if err != nil {
-		return err
-	}
-
-	if !enabled {
+	if !user.ProbeSettings.Active {
 		logg.Infof("skipping followup probe for userID=%v, probe is currently disabled", params["user_id"])
 		return nil
 	}
@@ -274,12 +265,7 @@ func (pScheduler ProbeScheduler) sendEmergencyProbe(params map[string]interface{
 		return err
 	}
 
-	enabled, err := user.IsProbeEnabled()
-	if err != nil {
-		return err
-	}
-
-	if !enabled {
+	if !user.ProbeSettings.Active {
 		logg.Infof("skipping emergency probe for userID=%v, probe is currently disabled", params["user_id"])
 		return nil
 	}
@@ -335,7 +321,7 @@ func (pScheduler ProbeScheduler) sendEmergencyProbe(params map[string]interface{
 		user.PhoneNumber,
 		fmt.Sprintf(
 			"Reached out to %v. Liveliness probe is now disabled. You can always turn this back on via your kronus API.",
-			emergencyContact.FirstName,
+			strings.Title(emergencyContact.FirstName),
 		),
 	)
 	if err != nil {

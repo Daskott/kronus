@@ -22,3 +22,6 @@ dev/config/server.yml
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# gcloud deploy files
+deploy/

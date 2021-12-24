@@ -3,6 +3,7 @@ package work
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Daskott/kronus/server/cron"
 	"github.com/Daskott/kronus/server/models"
@@ -10,6 +11,8 @@ import (
 )
 
 const MAX_CONCURRENCY = 1
+
+var ErrJobNotFoundInCronSch = errors.New("handler with provided name already mapped")
 
 type WorkerPoolAdapter struct {
 	cronScheduler *gocron.Scheduler
@@ -70,7 +73,7 @@ func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 //if a duplicate is added, an error is logged when the internal cron scheduler tries to add it
 // the job to the job qeue.
 func (adapter *WorkerPoolAdapter) PeriodicallyPerform(cronExpression string, job JobParams) error {
-	adapter.cronScheduler.Cron(cronExpression).Tag(job.Name).
+	_, err := adapter.cronScheduler.Cron(cronExpression).Tag(job.Name).
 		Do(
 			func(job JobParams) {
 				err := adapter.Perform(job)
@@ -80,9 +83,32 @@ func (adapter *WorkerPoolAdapter) PeriodicallyPerform(cronExpression string, job
 			},
 			job,
 		)
-	return nil
+	return err
 }
 
 func (adapter *WorkerPoolAdapter) RemovePeriodicJob(jobName string) {
 	adapter.cronScheduler.RemoveByTag(jobName)
+}
+
+func (adapter *WorkerPoolAdapter) UpdateJobScheduleByTag(tag, cronExpression string) error {
+	var job *gocron.Job
+
+	// Find job by tag in cronScheduler
+	for _, j := range adapter.cronScheduler.Jobs() {
+		if strings.Contains(strings.Join(j.Tags(), ","), tag) {
+			job = j
+			break
+		}
+	}
+
+	if job == nil {
+		return ErrJobNotFoundInCronSch
+	}
+
+	_, err := adapter.cronScheduler.Job(job).Cron(cronExpression).Update()
+	if err != nil {
+		logg.Error(err)
+	}
+
+	return nil
 }

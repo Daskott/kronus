@@ -85,6 +85,16 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
+func allUsersHandler(rw http.ResponseWriter, r *http.Request) {
+	users, err := models.AllUsersWithProbeSettings()
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: users}, http.StatusOK)
+}
+
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -184,7 +194,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removeUnknownFields(params, map[string]bool{"day": true, "time": true, "active": true})
+	removeUnknownFields(params, map[string]bool{"day": true, "time": true, "active": true, "cron_expression": true})
 	if len(params) <= 0 {
 		writeResponse(rw,
 			ResponsePayload{Errors: []string{"valid fields required"}},
@@ -430,6 +440,8 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	rw.Header().Set("Content-Type", "text/xml")
 
+	message := r.PostForm.Get("Body")
+
 	// Validate that request is coming from twilio
 	if !twilioClient.ValidateRequest(r.URL.Path, r.PostForm, r.Header.Get("X-Twilio-Signature")) {
 		writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusUnauthorized)
@@ -445,6 +457,13 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		writeErrMsgForSmsWebhook(rw, err)
+		return
+	}
+
+	// If it's a server ping from a user on the server - return response
+	if strings.TrimSpace(strings.ToLower(message)) == "ping" {
+		msgBytes, _ := xml.Marshal(&TwilioSmsResponse{Message: "PONG!"})
+		writeSmsWebHookResponse(rw, msgBytes, http.StatusOK)
 		return
 	}
 
@@ -473,7 +492,7 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// Determine if user probe was 'good' or 'bad' from their reply i.e. message
-	probe.LastResponse = r.PostForm.Get("Body")
+	probe.LastResponse = message
 	probeStatusName := probe.StatusFromLastResponse()
 
 	// if unable to determine probe status from msg - save 'LastResponse' & do nothing
