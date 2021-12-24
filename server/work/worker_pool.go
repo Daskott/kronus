@@ -26,7 +26,7 @@ func newWorkerPool(concurrency int) *workerPool {
 	}
 
 	for i := 0; i < concurrency; i++ {
-		wp.workers = append(wp.workers, newWorker([]int64{0, 10, 30, 60, 100, 120}))
+		wp.workers = append(wp.workers, newWorker([]int64{0, 10, 30, 60, 80, 100, 120}))
 	}
 
 	return &wp

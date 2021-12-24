@@ -75,7 +75,7 @@ func protectedRouteMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		currentUser, err := models.FindUserWithProbeSettiings(decodedJWT.Claims.Subject)
+		currentUser, err := models.FindUserBy("id", decodedJWT.Claims.Subject)
 		if err != nil {
 			writeResponse(w, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return

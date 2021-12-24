@@ -9,14 +9,14 @@ import (
 )
 
 var (
-	allFieldsExceptPassword = []string{"id",
-		"first_name",
-		"last_name",
-		"phone_number",
-		"email",
-		"role_id",
-		"created_at",
-		"updated_at",
+	allFieldsExceptPassword = []string{"users.id",
+		"users.first_name",
+		"users.last_name",
+		"users.phone_number",
+		"users.email",
+		"users.role_id",
+		"users.created_at",
+		"users.updated_at",
 	}
 
 	updatableFields = []string{"first_name",
@@ -28,15 +28,15 @@ var (
 
 type User struct {
 	BaseModel
-	FirstName     string        `json:"first_name" validate:"required"`
-	LastName      string        `json:"last_name" validate:"required"`
-	PhoneNumber   string        `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
-	Email         string        `json:"email" validate:"required,email" gorm:"not null;unique"`
-	Password      string        `json:"password,omitempty" validate:"required,password" gorm:"not null"`
-	RoleID        uint          `json:"role_id" gorm:"null"`
-	ProbeSettings *ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Contacts      []Contact     `json:"contacts,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Probes        []Probe       `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	FirstName     string       `json:"first_name" validate:"required"`
+	LastName      string       `json:"last_name" validate:"required"`
+	PhoneNumber   string       `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
+	Email         string       `json:"email" validate:"required,email" gorm:"not null;unique"`
+	Password      string       `json:"password,omitempty" validate:"required,password" gorm:"not null"`
+	RoleID        uint         `json:"role_id" gorm:"null"`
+	ProbeSettings ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Contacts      []Contact    `json:"contacts,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Probes        []Probe      `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
 // DisableProbe turns off probe for user & cancels all pending probes
@@ -94,7 +94,13 @@ func (user *User) Update(data map[string]interface{}) error {
 }
 
 func (user *User) UpdateProbSettings(data map[string]interface{}) error {
-	return db.Model(&ProbeSetting{}).Where("user_id = ? ", user.ID).Updates(data).Error
+	err := db.Model(&ProbeSetting{}).Where("user_id = ? ", user.ID).Updates(data).Error
+	if err != nil {
+		return err
+	}
+
+	// Reload user probe settings
+	return user.LoadProbeSettings()
 }
 
 func (user *User) IsAdmin() (bool, error) {
@@ -118,6 +124,11 @@ func (user *User) AddContact(contact *Contact) error {
 func (user *User) LoadContacts() error {
 	// TODO: Add pagination
 	return db.Limit(500).Find(&user.Contacts, "user_id = ?", user.ID).Error
+}
+
+func (user *User) LoadProbeSettings() error {
+	// TODO: Add pagination
+	return db.Find(&user.ProbeSettings, "user_id = ?", user.ID).Error
 }
 
 func (user *User) UpdateContact(contactID string, data map[string]interface{}) error {
@@ -149,15 +160,6 @@ func (user *User) LastProbe() (*Probe, error) {
 	return &probe, nil
 }
 
-func (user *User) IsProbeEnabled() (bool, error) {
-	pbSettings, err := FindProbeSettings(user.ID)
-	if err != nil {
-		return false, nil
-	}
-
-	return pbSettings.Active, nil
-}
-
 func FindProbeSettings(userID interface{}) (*ProbeSetting, error) {
 	probeSetting := ProbeSetting{}
 	err := db.First(&probeSetting, "user_id = ?", userID).Error
@@ -170,17 +172,7 @@ func FindProbeSettings(userID interface{}) (*ProbeSetting, error) {
 
 func FindUserBy(field string, value interface{}) (*User, error) {
 	user := User{}
-	err := db.Select(allFieldsExceptPassword).First(&user, fmt.Sprintf("%v = ?", field), value).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return &user, nil
-}
-
-func FindUserWithProbeSettiings(userID interface{}) (*User, error) {
-	user := User{}
-	err := db.Preload("ProbeSettings").Select(allFieldsExceptPassword).First(&user, userID).Error
+	err := db.Preload("ProbeSettings").Select(allFieldsExceptPassword).First(&user, fmt.Sprintf("%v = ?", field), value).Error
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +197,7 @@ func CreateUser(user *User) error {
 	}
 	user.Password = passwordHash
 
-	user.ProbeSettings = &ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
+	user.ProbeSettings = ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
 	return db.Create(user).Error
 }
 
@@ -235,6 +227,21 @@ func UsersWithActiveProbe() ([]User, error) {
 		Find(&users).Error
 
 	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func AllUsersWithProbeSettings() ([]User, error) {
+	users := []User{}
+
+	// TODO: Add pagination
+	err := db.Limit(500).Preload("ProbeSettings").Select(allFieldsExceptPassword).Joins(
+		"INNER JOIN probe_settings ON probe_settings.user_id = users.id").
+		Find(&users).Error
+
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 

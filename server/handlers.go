@@ -85,6 +85,16 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
+func allUsersHandler(rw http.ResponseWriter, r *http.Request) {
+	users, err := models.AllUsersWithProbeSettings()
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: users}, http.StatusOK)
+}
+
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -184,7 +194,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removeUnknownFields(params, map[string]bool{"day": true, "time": true, "active": true})
+	removeUnknownFields(params, map[string]bool{"day": true, "time": true, "active": true, "cron_expression": true})
 	if len(params) <= 0 {
 		writeResponse(rw,
 			ResponsePayload{Errors: []string{"valid fields required"}},
