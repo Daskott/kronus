@@ -47,7 +47,7 @@ twilio:
   messagingServiceSid: CHKX00SXXXXXXXXXXXXXXXXXXX
 ```
 
-### Start server in Dev Mode
+### Start server in dev mode
 ```
 kronus server --dev
 ```
