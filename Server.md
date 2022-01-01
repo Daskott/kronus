@@ -57,7 +57,7 @@ kronus server --dev
 kronus server --config=config.yml
 ```
 
-### Steps to setup account with probe
+### Setup steps
 - Create a user account using `POST` **/users**
 - Get access `token` for protected routes using `POST` **/login**
 - Add a contact & set as emergency contact using `POST` **/users/{uid}/contacts/**
@@ -150,7 +150,8 @@ kronus server --config=config.yml
          As a result, if you deploy this to a production environment, it should run on a single pod/machine.
 
 - Q: Why SQLite ?
-    - A: For ease of use as you don't require a lot of external systems to set the kronus server up. Also the SQLite file is encrypted using the provided `passPhrase` with AES-256, see https://github.com/sqlcipher/sqlcipher.
+    - A1: I don't want to pay for a hosted database
+    - A2: For ease of use, as you don't require a lot of external systems to get started. For data protection, the SQLite file is encrypted using the provided `passPhrase` with AES-256, see https://github.com/sqlcipher/sqlcipher.
 
 - Q: Is this a dead man's switch ?
     - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
