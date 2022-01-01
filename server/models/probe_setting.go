@@ -21,7 +21,7 @@ var (
 
 type ProbeSetting struct {
 	BaseModel
-	UserID         uint   `gorm:"not null;unique"`
-	Active         bool   `gorm:"default:false"`
-	CronExpression string `gorm:"not null"`
+	UserID         uint   `json:"user_id" gorm:"not null;unique"`
+	Active         bool   `json:"active" gorm:"default:false"`
+	CronExpression string `json:"cron_expression" gorm:"not null"`
 }

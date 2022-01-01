@@ -1,17 +1,13 @@
 ## Kronus `server` (pre-alpha)
 
-The `server` is a new* feature currently in `pre-alpha`, and available through the `server` cmd on the CLI app.
-```
-kronus server -h
-```
-Kronus server allows you to schedule a liveliness probe for users on the server and sends out messages to emergency contacts if no/bad response is gotten from a user.
+The server schedules a liveliness probe for users in the database and sends out messages to emergency contacts if no/bad response is gotten from a user for a probe.
 
-### Dependcies
-- Google cloud storage credentials - (Optional - for db backup)
-- Twilio account - for sending probe messages
+### Dependencies
+- [Google application credentials](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-console) for [cloud storage](https://cloud.google.com/storage) - (Optional - for sqlite file backup)
+- [Twilio account](https://www.twilio.com/) credentials - for sending probe messages
 
 ### Server Config
-The server requires a valid `/config.yml` configuration file as shown below:
+The server requires a valid `./config.yml` configuration file as shown below:
 ```yml
 kronus:
   # A valid RSA private key for creating/validating kronus server jwts
@@ -23,7 +19,8 @@ kronus:
   publicUrl: "https://my-app.com"
   
   cron:
-    timeZone: "America/Toronto" # Timezone to use for scheduling probes
+    # Timezone to use for scheduling probes
+    timeZone: "America/Toronto"
   
   listener:
     port: 3000
@@ -50,9 +47,14 @@ twilio:
   messagingServiceSid: CHKX00SXXXXXXXXXXXXXXXXXXX
 ```
 
-### Start server
+### Start server in Dev Mode
 ```
-kronus server --config=/config.yml
+kronus server --dev
+```
+
+### Start server with config
+```
+kronus server --config=./config.yml
 ```
 
 ### API and Usage
