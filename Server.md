@@ -39,6 +39,9 @@ google:
     sqliteBackupSchedule: "0 * * * *"
 
     enableSqliteBackupAndSync: true
+  
+  # The path to google service account credentials. You may not need to set this, if the
+  # kronus server is deployed to a google compute engine instance - the default credentials may be used instead.
   applicationCredentials: "/path/to/google/credentials"
 
 twilio:
