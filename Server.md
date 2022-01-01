@@ -58,14 +58,16 @@ kronus server --config=config.yml
 ```
 
 ### Setup steps
-- Create a user account using `POST` **/users**
+- [Create a user](#create_user) account
 - Get access `token` for protected routes using `POST` **/login**
 - Add a contact & set as emergency contact using `POST` **/users/{uid}/contacts/**
 - And finally turn on the emergency probe using `POST` **/users/{uid}/probe_settings/**
 
 
 ### API and Usage
-- `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
+
+- #### **Create user**
+  `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
   ```json
   {
       "first_name": "tony",
@@ -76,13 +78,16 @@ kronus server --config=config.yml
   }
   ```
 
-- `POST` **/login**  - Login to get a `token` which will be used to query protected resources 
+- #### **Get access token**
+  `POST` **/login**  - Login to get a `token` which will be used to query protected resources 
   ```json
   {
       "email": "stark@avengers.com",
       "password": "very-secure"
   }
   ```
+
+#### **Create contact**
 - `POST` **/users/{uid}/contacts/** - For protected routes, the token from the **/login** needs to be added to the `Authorization` header as `Bearer <TOKEN>`
   ```json
   {
