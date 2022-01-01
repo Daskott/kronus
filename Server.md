@@ -60,14 +60,15 @@ kronus server --config=config.yml
 ### Setup steps
 - [Create a user](#create-user) account
 - [Get access token](#get-access-token) for protected routes
-- [Add a contact](#create-contact) and set as emergency
+- [Add a contact](#create-contact) and set as user's emergency contact
 - Finally [turn on the emergency probe](#update-probe-settings)
 
 
 ### API and Usage
 
 #### Create user
-- `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
+- `POST` **/users** <br/>The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
+  <br/>A default `probe_settings` is created for the user account, and `active` is set to `false`.
   ```json
   {
       "first_name": "tony",
@@ -88,7 +89,7 @@ kronus server --config=config.yml
   ```
 
 #### Create contact
-- `POST` **/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <TOKEN>`
+- `POST` **/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
   ```json
   {
       "first_name": "strongest",
@@ -100,15 +101,7 @@ kronus server --config=config.yml
   ```
 
 #### Update probe settings
-- `PUT` **/users/{uid}/probe_settings/** <br/> Set `day` and `time` of the week to receive probe messages & use `active` to enable/disable probe.
-  ```json
-  {
-      "day": "fri",
-      "time": "22:00",
-      "active": true
-  }
-  ```
-  Alternatively, you can customize how often you get a probe message with a `cron_expression`
+- `PUT` **/users/{uid}/probe_settings/** <br/> Set how often you'd like to get a probe message with a `cron_expression` and use `active` to enable/disable probe.
   ```json
   {
       "cron_expression": "0 18 * * */1",
