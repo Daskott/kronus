@@ -7,7 +7,7 @@ The server schedules a liveliness probe for users in the database and sends out 
 - [Twilio account](https://www.twilio.com/) credentials - for sending probe messages
 
 ### Server Config
-The server requires a valid `./config.yml` configuration file as shown below:
+The server requires a valid `config.yml` configuration file as shown below:
 ```yml
 kronus:
   # A valid RSA private key for creating/validating kronus server jwts
@@ -54,47 +54,61 @@ kronus server --dev
 
 ### Start server with config
 ```
-kronus server --config=./config.yml
+kronus server --config=config.yml
 ```
+
+### Steps to setup account with probe
+- Create a user account using `POST` **/users**
+- Get access `token` for protected routes using `POST` **/login**
+- Add a contact & set as emergency contact using `POST` **/users/{uid}/contacts/**
+- And finally turn on the emergency probe using `POST` **/users/{uid}/probe_settings/**
+
 
 ### API and Usage
 - `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
-```json
-{
-    "first_name": "tony",
-    "last_name": "stark",
-    "email": "stark@avengers.com",
-    "password": "very-secure",
-    "phone_number": "+12345678900"
-}
-```
+  ```json
+  {
+      "first_name": "tony",
+      "last_name": "stark",
+      "email": "stark@avengers.com",
+      "password": "very-secure",
+      "phone_number": "+12345678900"
+  }
+  ```
 
 - `POST` **/login**  - Login to get a `token` which will be used to query protected resources 
-```json
-{
-    "email": "stark@avengers.com",
-    "password": "very-secure"
-}
-```
-- `POST` **/users/{uid}/contacts/** - For protected routes, the token from the provious step needs to be added to the `Authorization` header as `Bearer <TOKEN>`
-```json
-{
-    "first_name": "strongest",
-    "last_name": "avenger",
-    "phone_number": "+12345678900",
-    "email": "hulk@avengers.com",
-    "is_emergency_contact": true
-}
-```
+  ```json
+  {
+      "email": "stark@avengers.com",
+      "password": "very-secure"
+  }
+  ```
+- `POST` **/users/{uid}/contacts/** - For protected routes, the token from the **/login** needs to be added to the `Authorization` header as `Bearer <TOKEN>`
+  ```json
+  {
+      "first_name": "strongest",
+      "last_name": "avenger",
+      "phone_number": "+12345678900",
+      "email": "hulk@avengers.com",
+      "is_emergency_contact": true
+  }
+  ```
 
 - `PUT` **/users/{uid}/probe_settings/** set `day` and `time` of the week to receive probe messages & use `active` to enable/disable probe.
-```json
-{
-    "day": "fri",
-    "time": "22:00",
-    "active": true
-}
-```
+  ```json
+  {
+      "day": "fri",
+      "time": "22:00",
+      "active": true
+  }
+  ```
+  Alternatively, you can customize how often you get a probe message with a `cron_expression`
+  ```json
+  {
+      "cron_expression": "0 18 * * */1",
+      "active": true
+  }
+  ```
 - Admin only routes
 
     | Method | Route | Note |
@@ -131,8 +145,9 @@ kronus server --config=./config.yml
 - In both a `bad` or `unavailable` state the server sends out a message to the user's emergency contact and then disables the probe.
 
 ## FAQ
-- Q: Where's all the data stored ?
-    - A: SQLite file
+- Q: Does this work in a distributed environment ?
+    - A: No. This doesn't work in a distributed environment at the moment, because the server uses Sqlite3 to store all it's data.
+         As a result, if you deploy this to a production environment, it should run on a single pod/machine.
 
 - Q: Why SQLite ?
     - A: For ease of use as you don't require a lot of external systems to set the kronus server up. Also the SQLite file is encrypted using the provided `passPhrase` with AES-256, see https://github.com/sqlcipher/sqlcipher.
