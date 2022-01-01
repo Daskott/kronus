@@ -59,15 +59,15 @@ kronus server --config=config.yml
 
 ### Setup steps
 - [Create a user](#create_user) account
-- Get access `token` for protected routes using `POST` **/login**
-- Add a contact & set as emergency contact using `POST` **/users/{uid}/contacts/**
-- And finally turn on the emergency probe using `POST` **/users/{uid}/probe_settings/**
+- [Get access token](#get_access_token) for protected routes
+- [Add a contact](#create_contact) and set as emergency
+- Finally [turn on the emergency probe](#update_probe_settings)
 
 
 ### API and Usage
 
-- #### **Create user**
-  `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
+#### Create user
+- `POST` **/users**  - The first user created is assigned `admin` role & every other user has to be created by the `admin`
   ```json
   {
       "first_name": "tony",
@@ -78,8 +78,8 @@ kronus server --config=config.yml
   }
   ```
 
-- #### **Get access token**
-  `POST` **/login**  - Login to get a `token` which will be used to query protected resources 
+#### Get access token
+- `POST` **/login** <br/> Get access `token` which will be used to query protected resources 
   ```json
   {
       "email": "stark@avengers.com",
@@ -87,8 +87,8 @@ kronus server --config=config.yml
   }
   ```
 
-#### **Create contact**
-- `POST` **/users/{uid}/contacts/** - For protected routes, the token from the **/login** needs to be added to the `Authorization` header as `Bearer <TOKEN>`
+#### Create contact
+- `POST` **/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <TOKEN>`
   ```json
   {
       "first_name": "strongest",
@@ -99,7 +99,8 @@ kronus server --config=config.yml
   }
   ```
 
-- `PUT` **/users/{uid}/probe_settings/** set `day` and `time` of the week to receive probe messages & use `active` to enable/disable probe.
+#### Update probe settings
+- `PUT` **/users/{uid}/probe_settings/** <br/> Set `day` and `time` of the week to receive probe messages & use `active` to enable/disable probe.
   ```json
   {
       "day": "fri",
@@ -114,29 +115,30 @@ kronus server --config=config.yml
       "active": true
   }
   ```
-- Admin only routes
 
-    | Method | Route | Note |
-    | --- | --- | --- |
-    | `GET` | **/users** | Fetch all users |
-    | `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` |
-    | `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` |
-    | `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable`|
-    | `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` |
+#### Admin only routes
 
-- Other routes
+  | Method | Route | Note |
+  | --- | --- | --- |
+  | `GET` | **/users** | Fetch all users |
+  | `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` |
+  | `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` |
+  | `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable`|
+  | `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` |
 
-    | Method | Route | Note |
-    | --- | --- | --- |
-    | `POST` | **/webhook/sms** | For twilio message webhook |
-    | `GET` | **/jwks** | For validating kronus server jwts |
-    | `GET` | **/health** | To check service health |
-    | `GET` | **/users/{uid}**| Can only GET your own record, except if you're admin |
-    | `PUT` |**/users/{uid}**| Can only UPDATE own record |
-    | `DELETE` |**/users/{uid}**| Can only DELETE your own record, except if you're admin |
-    | `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
-    | `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
-    | `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
+#### Other routes
+
+  | Method | Route | Note |
+  | --- | --- | --- |
+  | `POST` | **/webhook/sms** | For twilio message webhook |
+  | `GET` | **/jwks** | For validating kronus server jwts |
+  | `GET` | **/health** | To check service health |
+  | `GET` | **/users/{uid}**| Can only GET your own record, except if you're admin |
+  | `PUT` |**/users/{uid}**| Can only UPDATE own record |
+  | `DELETE` |**/users/{uid}**| Can only DELETE your own record, except if you're admin |
+  | `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
+  | `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
+  | `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
 
 ## Design Concepts
 ### Probes
