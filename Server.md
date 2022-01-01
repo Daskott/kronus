@@ -129,11 +129,11 @@ kronus server --config=config.yml
 | `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
 | `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
 | `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
-| `GET` | **/users** | Fetch all users **`[admin-only]`** |
-| `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` - **`[admin-only]`**|
-| `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` - **`[admin-only]`**|
-| `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - **`[admin-only]`**|
-| `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` - **`[admin-only]`**|
+| `GET` | **/users** | Fetch all users ***[admin-only]*** |
+| `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` - ***[admin-only]***|
+| `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` - ***[admin-only]***|
+| `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
+| `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
 
 ## Design Concepts
 ### Probes
@@ -143,7 +143,7 @@ kronus server --config=config.yml
     - `good` - The server has gotten a valid response for good i.e `Yes`, `Yeah`, `Yh` or `Y`
     - `bad` - The server has gotten a valid response for bad i.e `No`, `Nope`, `Nah` or `N`
     - `cancelled` - The probe was cancelled by the user via the rest API
-    - `unavailable` - The server did not receive any response after multiple retries i.e `"You good ?"`
+    - `unavailable` - The server did not receive any response after multiple retries i.e `"You good ??"`
 - In both a `bad` or `unavailable` state the server sends out a message to the user's emergency contact and then disables the probe.
 
 ## FAQ
