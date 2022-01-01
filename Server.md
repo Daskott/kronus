@@ -148,7 +148,7 @@ kronus server --config=config.yml
          As a result, if you deploy this to a production environment, it should run on a single pod/machine.
 
 - Q: Why SQLite ?
-    - A1: I don't want to pay for a hosted database
+    - A1: I don't want to pay for a hosted database 😅
     - A2: For ease of use, as you don't require a lot of external systems to get started. For data protection, the SQLite file is encrypted using the provided `passPhrase` with AES-256, see https://github.com/sqlcipher/sqlcipher.
 
 - Q: Is this a dead man's switch ?
