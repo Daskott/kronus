@@ -58,10 +58,10 @@ kronus server --config=config.yml
 ```
 
 ### Setup steps
-- [Create a user](#create_user) account
-- [Get access token](#get_access_token) for protected routes
-- [Add a contact](#create_contact) and set as emergency
-- Finally [turn on the emergency probe](#update_probe_settings)
+- [Create a user](#create-user) account
+- [Get access token](#get-access-token) for protected routes
+- [Add a contact](#create-contact) and set as emergency
+- Finally [turn on the emergency probe](#update-probe-settings)
 
 
 ### API and Usage
@@ -116,29 +116,24 @@ kronus server --config=config.yml
   }
   ```
 
-#### Admin only routes
-
-  | Method | Route | Note |
-  | --- | --- | --- |
-  | `GET` | **/users** | Fetch all users |
-  | `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` |
-  | `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` |
-  | `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable`|
-  | `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` |
-
 #### Other routes
 
-  | Method | Route | Note |
-  | --- | --- | --- |
-  | `POST` | **/webhook/sms** | For twilio message webhook |
-  | `GET` | **/jwks** | For validating kronus server jwts |
-  | `GET` | **/health** | To check service health |
-  | `GET` | **/users/{uid}**| Can only GET your own record, except if you're admin |
-  | `PUT` |**/users/{uid}**| Can only UPDATE own record |
-  | `DELETE` |**/users/{uid}**| Can only DELETE your own record, except if you're admin |
-  | `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
-  | `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
-  | `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
+| Method | Route | Note |
+| --- | --- | --- |
+| `POST` | **/webhook/sms** | For twilio message webhook |
+| `GET` | **/jwks** | For validating kronus server jwts |
+| `GET` | **/health** | To check service health |
+| `GET` | **/users/{uid}**| Can only GET your own record, except if you're admin |
+| `PUT` |**/users/{uid}**| Can only UPDATE own record |
+| `DELETE` |**/users/{uid}**| Can only DELETE your own record, except if you're admin |
+| `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
+| `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
+| `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
+| `GET` | **/users** | Fetch all users **`[admin-only]`** |
+| `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` - **`[admin-only]`**|
+| `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` - **`[admin-only]`**|
+| `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - **`[admin-only]`**|
+| `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` - **`[admin-only]`**|
 
 ## Design Concepts
 ### Probes
