@@ -232,23 +232,19 @@ func cleanup(workerPool *work.WorkerPoolAdapter, server *http.Server, backupDb b
 // configDirectory retrieves the directory to store kronus configs
 // Or logs an error message and then calls os.Exit if it's unable to.
 func configDirectory(devMode bool) string {
-	var configFolderName string
-
-	// Use dev folder in project directory for dev
-	if devMode {
-		configFolderName = "dev"
-		projectDir, err := os.Getwd()
-		fatalOnError(err)
-
-		return filepath.Join(projectDir, configFolderName)
-	}
-
-	// Use kronus folder in home directory for prod
-	configFolderName = "kronus"
-	homeDir, err := os.UserHomeDir()
+	// Use 'kronus' folder in home directory for prod
+	configFolderName := "kronus"
+	rootDir, err := os.UserHomeDir()
 	fatalOnError(err)
 
-	configDir := filepath.Join(homeDir, configFolderName)
+	// Use 'dev' folder in current directory for dev mode
+	if devMode {
+		configFolderName = "dev"
+		rootDir, err = os.Getwd()
+		fatalOnError(err)
+	}
+
+	configDir := filepath.Join(rootDir, configFolderName)
 
 	err = utils.CreateDirIfNotExist(configDir)
 	fatalOnError(err)
