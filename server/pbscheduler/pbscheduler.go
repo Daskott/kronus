@@ -79,6 +79,11 @@ func (pScheduler ProbeScheduler) ScheduleProbes() {
 	pScheduler.initPeriodicFollowupProbesEnqeuer()
 }
 
+// EmergencyProbeName returns the string used as tag for an emergency probe job name
+func EmergencyProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
+}
+
 // Creates 'liveliness probe' cron jobs for users with 'active' probe_settings.
 // And when each cron is triggered, the job is sent to a queue to be executed.
 func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
@@ -95,13 +100,8 @@ func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 	return nil
 }
 
-// EmergencyProbeName returns the string used as tag for an emergency probe job name
-func EmergencyProbeName(userID interface{}) string {
-	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
-}
-
 // Creates 'followup probe' cron jobs for users with 'pending' liveliness probes.
-// And when each cron is triggered i.e every 30mins, followup jobs are sent to a queue to be executed.
+// And when each cron is triggered i.e every 5mins, followup jobs are sent to a queue to be executed.
 func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
 	pbs.workerPoolAdapter.PeriodicallyPerform("*/5 * * * *", work.JobParams{
 		Name:    ENQUEUE_FOLLOWUP_PROBES_HANDLER,
