@@ -47,8 +47,8 @@ func newWorker(sleepBackoffsInSeconds []int64) *worker {
 	}
 }
 
-// RegisterHandler binds a name to a job handler.
-func (w *worker) RegisterHandler(name string, handler Handler) error {
+// registerHandler binds a name to a job handler.
+func (w *worker) registerHandler(name string, handler Handler) error {
 	if _, ok := w.handlers[name]; ok {
 		return ErrDuplicateHandler
 	}
@@ -58,7 +58,7 @@ func (w *worker) RegisterHandler(name string, handler Handler) error {
 	return nil
 }
 
-// Start starts the worker loop that pulls jobs from the queue & process them
+// start starts the worker loop that pulls jobs from the queue & process them
 func (w *worker) start() {
 	go w.loop()
 }

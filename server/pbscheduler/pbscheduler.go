@@ -79,6 +79,11 @@ func (pScheduler ProbeScheduler) ScheduleProbes() {
 	pScheduler.initPeriodicFollowupProbesEnqeuer()
 }
 
+// EmergencyProbeName returns the string used as tag for an emergency probe job name
+func EmergencyProbeName(userID interface{}) string {
+	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
+}
+
 // Creates 'liveliness probe' cron jobs for users with 'active' probe_settings.
 // And when each cron is triggered, the job is sent to a queue to be executed.
 func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
@@ -95,13 +100,8 @@ func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 	return nil
 }
 
-// EmergencyProbeName returns the string used as tag for an emergency probe job name
-func EmergencyProbeName(userID interface{}) string {
-	return fmt.Sprintf("%v-%v", SEND_EMERGENCY_PROBE_HANDLER, userID)
-}
-
 // Creates 'followup probe' cron jobs for users with 'pending' liveliness probes.
-// And when each cron is triggered i.e every 30mins, followup jobs are sent to a queue to be executed.
+// And when each cron is triggered i.e every 5mins, followup jobs are sent to a queue to be executed.
 func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
 	pbs.workerPoolAdapter.PeriodicallyPerform("*/5 * * * *", work.JobParams{
 		Name:    ENQUEUE_FOLLOWUP_PROBES_HANDLER,
@@ -123,6 +123,19 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 		jobArgs["user_id"] = probe.UserID
 		jobArgs["probe_id"] = probe.ID
 
+		// Only send out followup probe after at least 1 hour after the last probe was sent,
+		// until max-retries. So the user has enough time to respond.
+		//
+		// E.g sendInitialProbe @ 5:OOpm
+		// Follow up 1 will be @ ~6:00pm
+		// Follow up 2 will be @ ~7:00pm
+		// Follow up 3 will be @ ~8:00pm
+		//
+		// And if no respons, @ ~9:00pm send out emergency probe
+		if time.Since(probe.UpdatedAt) < 1*time.Hour {
+			continue
+		}
+
 		// if max retries is exceeded, send emergency probe
 		if probe.RetryCount >= MAX_PROBE_RETRIES {
 			jobArgs["probe_status"] = models.UNAVAILABLE_PROBE
@@ -137,18 +150,6 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 				logg.Error(err)
 			}
 
-			continue
-		}
-
-		// Only send out followup probes at least 1 hour after the last probe was sent
-		// With each followup taking (1+ no. of retires) hours longer, so user doesn't get spammed
-		// up until max-retries. So the user has enough time to respond
-		//
-		// E.g sendInitialProbe @ 5:OOpm
-		// Follow up 1 will be @ ~6:00pm
-		// Follow up 2 will be @ ~7:00pm
-		// Follow up 3 will be @ ~8:00pm
-		if time.Since(probe.UpdatedAt) < 1*time.Hour {
 			continue
 		}
 

@@ -19,7 +19,7 @@ func newRequeuer() *requeuer {
 	}
 }
 
-// Start starts the requeuer loop that pulls jobs from 'in-progress'
+// start starts the requeuer loop that pulls jobs from 'in-progress'
 // that are stuck(i.e stayed too long in-progress) and requeue them
 func (r *requeuer) start() {
 	go r.loop()
