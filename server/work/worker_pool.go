@@ -39,7 +39,7 @@ func (wp *workerPool) registerHandler(name string, handler Handler) error {
 	}
 
 	for _, worker := range wp.workers {
-		err := worker.RegisterHandler(name, handler)
+		err := worker.registerHandler(name, handler)
 
 		// Only panic if we get an error that is unexpected i.e !ErrDuplicateHandler
 		if err != nil && !errors.Is(err, ErrDuplicateHandler) {

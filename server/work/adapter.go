@@ -49,7 +49,7 @@ func (adapter *WorkerPoolAdapter) Register(name string, handler Handler) error {
 	return adapter.pool.registerHandler(name, handler)
 }
 
-// Perform sends a new job to the queue, now - to be executed as soon as a worker is available
+// Perform sends a new job to the queue to be executed as soon as a worker is available
 func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 	logg.Infof("Enqueuing job: %v", job)
 
@@ -71,7 +71,7 @@ func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 //
 // NOTE: All enqueued jobs are unique by name.
 //if a duplicate is added, an error is logged when the internal cron scheduler tries to add it
-// the job to the job qeue.
+// the job to the job queue.
 func (adapter *WorkerPoolAdapter) PeriodicallyPerform(cronExpression string, job JobParams) error {
 	_, err := adapter.cronScheduler.Cron(cronExpression).Tag(job.Name).
 		Do(
