@@ -14,7 +14,6 @@ import (
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
-	"github.com/adhocore/gronx"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
@@ -71,14 +70,14 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 	user.RoleID = role.ID
 
-	// TODO: Handle constraint errors properly
 	err = models.CreateUser(&user)
-	if err != nil {
-		if strings.Contains(err.Error(), "Duplicate") {
-			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
-			return
-		}
 
+	if errors.Is(err, models.ErrDuplicateUserEmail) || errors.Is(err, models.ErrDuplicateUserNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +184,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
-	gron := gronx.New()
+	// gron := gronx.New()
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -209,7 +208,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		errs = append(errs, "'active' field must be a boolean e.g. true/false")
 	}
 
-	if params["cron_expression"] != nil && !gron.IsValid(params["cron_expression"].(string)) {
+	if params["cron_expression"] != nil && !isValidCronExpression(params["cron_expression"].(string)) {
 		errs = append(errs, "'cron_expression' field must be valid e.g. '0 18 * * 3'")
 	}
 
@@ -272,8 +271,13 @@ func createContactHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Handle duplicate error properly i.e return 400 instead of 500
 	err = currentUser.AddContact(&contact)
+
+	if errors.Is(err, models.ErrDuplicateContactEmail) || errors.Is(err, models.ErrDuplicateContactNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -341,6 +345,12 @@ func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	err = currentUser.UpdateContact(vars["id"], params)
+
+	if errors.Is(err, models.ErrDuplicateContactEmail) || errors.Is(err, models.ErrDuplicateContactNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return

@@ -1,5 +1,12 @@
 package models
 
+import "errors"
+
+var (
+	ErrDuplicateContactEmail  = errors.New("contact with the same 'email' already exist")
+	ErrDuplicateContactNumber = errors.New("contact with the same 'phone_number' already exist")
+)
+
 type Contact struct {
 	BaseModel
 	FirstName          string           `json:"first_name" validate:"required"`

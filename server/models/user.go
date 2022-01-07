@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Daskott/kronus/server/auth"
 	"gorm.io/gorm"
@@ -24,6 +25,9 @@ var (
 		"phone_number",
 		"password",
 	}
+
+	ErrDuplicateUserEmail  = errors.New("user with the same 'email' already exist")
+	ErrDuplicateUserNumber = errors.New("user with the same 'phone_number' already exist")
 )
 
 type User struct {
@@ -118,7 +122,19 @@ func (user *User) IsAdmin() (bool, error) {
 
 func (user *User) AddContact(contact *Contact) error {
 	contact.UserID = user.ID
-	return db.Create(contact).Error
+	err := db.Create(contact).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.email") {
+		return ErrDuplicateContactEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.phone_number") {
+		return ErrDuplicateContactNumber
+	}
+
+	return err
 }
 
 func (user *User) LoadContacts() error {
@@ -198,7 +214,19 @@ func CreateUser(user *User) error {
 	user.Password = passwordHash
 
 	user.ProbeSettings = ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
-	return db.Create(user).Error
+	err = db.Create(user).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.email") {
+		return ErrDuplicateUserEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.phone_number") {
+		return ErrDuplicateUserNumber
+	}
+
+	return err
 }
 
 func DeleteUser(id interface{}) error {

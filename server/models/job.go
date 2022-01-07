@@ -7,9 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var (
-	ErrDuplicateJob = errors.New("job with the given name already exists in queue")
-)
+var ErrDuplicateJob = errors.New("job with the given name already exists in queue")
 
 type Job struct {
 	BaseModel
