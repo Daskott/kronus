@@ -183,6 +183,8 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
+	var errs []string
+
 	gron := gronx.New()
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
@@ -204,12 +206,15 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
-		writeResponse(rw, ResponsePayload{Errors: []string{"active must be a boolean e.g. true/false"}}, http.StatusBadRequest)
-		return
+		errs = append(errs, "'active' field must be a boolean e.g. true/false")
 	}
 
 	if params["cron_expression"] != nil && !gron.IsValid(params["cron_expression"].(string)) {
-		writeResponse(rw, ResponsePayload{Errors: []string{"a valid cron expression is required e.g. '0 18 * * 3'"}}, http.StatusBadRequest)
+		errs = append(errs, "'cron_expression' field must be valid e.g. '0 18 * * 3'")
+	}
+
+	if len(errs) > 0 {
+		writeResponse(rw, ResponsePayload{Errors: errs}, http.StatusBadRequest)
 		return
 	}
 
@@ -234,15 +239,14 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If probe request is turning on probe or updating an already active probe, re-queue the probe on the scheduler
-	// so the new changes go into effect
-	if enableProbe, ok := params["active"].(bool); currentUser.ProbeSettings.Active || (ok && enableProbe) {
+	// If probe request is `Active` after update, update the probeScheduler with the user's probe settings
+	if currentUser.ProbeSettings.Active {
 		probeScheduler.PeriodicallyPerfomProbe(*currentUser)
 	}
 
+	// Remove user probe from probeScheduler if disabled
 	if enableProbe, ok := params["active"].(bool); ok && !enableProbe {
-		err := probeScheduler.DisablePeriodicProbe(currentUser)
-		if err != nil {
+		if err := probeScheduler.DisablePeriodicProbe(currentUser); err != nil {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
 		}
