@@ -182,8 +182,6 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
-	var errs []string
-
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -204,21 +202,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
-		errs = append(errs, "active must be a boolean e.g. true/false")
-	}
-
-	if params["time"] != nil {
-		if err := validate.Var(params["time"], "time_stamp"); err != nil {
-			errs = append(errs, "valid 'time' field is required e.g. 18:30")
-		}
-	}
-
-	if params["day"] != nil && models.CRON_DAY_MAPPINGS[params["day"].(string)] == "" {
-		errs = append(errs, "valid 'day' field is required e.g. sun, mon, tue, wed, thu, fri or sat")
-	}
-
-	if len(errs) > 0 {
-		writeResponse(rw, ResponsePayload{Errors: errs}, http.StatusBadRequest)
+		writeResponse(rw, ResponsePayload{Errors: []string{"active must be a boolean e.g. true/false"}}, http.StatusBadRequest)
 		return
 	}
 
@@ -237,7 +221,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = currentUser.UpdateProbSettings(probeSettingFieldsFromParams(params))
+	err = currentUser.UpdateProbSettings(params)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
