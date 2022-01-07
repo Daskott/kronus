@@ -14,6 +14,7 @@ import (
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
+	"github.com/adhocore/gronx"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
@@ -184,6 +185,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
+	gron := gronx.New()
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -204,17 +206,11 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
-		errs = append(errs, "active must be a boolean e.g. true/false")
+		errs = append(errs, "'active' field must be a boolean e.g. true/false")
 	}
 
-	if params["time"] != nil {
-		if err := validate.Var(params["time"], "time_stamp"); err != nil {
-			errs = append(errs, "valid 'time' field is required e.g. 18:30")
-		}
-	}
-
-	if params["day"] != nil && models.CRON_DAY_MAPPINGS[params["day"].(string)] == "" {
-		errs = append(errs, "valid 'day' field is required e.g. sun, mon, tue, wed, thu, fri or sat")
+	if params["cron_expression"] != nil && !gron.IsValid(params["cron_expression"].(string)) {
+		errs = append(errs, "'cron_expression' field must be valid e.g. '0 18 * * 3'")
 	}
 
 	if len(errs) > 0 {
@@ -237,21 +233,20 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = currentUser.UpdateProbSettings(probeSettingFieldsFromParams(params))
+	err = currentUser.UpdateProbSettings(params)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	// If probe request is turning on probe or updating an already active probe, re-queue the probe on the scheduler
-	// so the new changes go into effect
-	if enableProbe, ok := params["active"].(bool); currentUser.ProbeSettings.Active || (ok && enableProbe) {
+	// If probe request is `Active` after update, update the probeScheduler with the user's probe settings
+	if currentUser.ProbeSettings.Active {
 		probeScheduler.PeriodicallyPerfomProbe(*currentUser)
 	}
 
+	// Remove user probe from probeScheduler if disabled
 	if enableProbe, ok := params["active"].(bool); ok && !enableProbe {
-		err := probeScheduler.DisablePeriodicProbe(currentUser)
-		if err != nil {
+		if err := probeScheduler.DisablePeriodicProbe(currentUser); err != nil {
 			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 			return
 		}

@@ -51,6 +51,8 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/Daskott/gorm-sqlite-cipher v0.2.1 h1:lAtP5Wyy2cAimnapIc13uTlDfAf7giymbF6ONuDb6Wc=
 github.com/Daskott/gorm-sqlite-cipher v0.2.1/go.mod h1:rSlSCU4ZGBtVQCYJyjQy3lyxM6SGM1I0a5m960cN72s=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
+github.com/adhocore/gronx v0.2.6 h1:bFcYDpnDOOJ+ExO9fhLjNm5sB5+U8JCOaa0SgFYWkFw=
+github.com/adhocore/gronx v0.2.6/go.mod h1:7oUY1WAU8rEJWmAxXR2DN0JaO4gi9khSgKjiRypqteg=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=

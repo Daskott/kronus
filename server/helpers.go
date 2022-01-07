@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -60,48 +59,6 @@ func removeUnknownFields(args map[string]interface{}, validFields map[string]boo
 			delete(args, key)
 		}
 	}
-}
-
-func probeSettingFieldsFromParams(params map[string]interface{}) map[string]interface{} {
-	newParams := make(map[string]interface{})
-
-	cronDay := models.DEFAULT_PROBE_CRON_DAY
-	cronHour := models.DEFAULT_PROBE_CRON_HOUR
-	cronMinute := models.DEFAULT_PROBE_CRON_MINUTE
-	derivedCronExpression := ""
-
-	if params["active"] != nil {
-		newParams["active"] = params["active"]
-	}
-
-	// If a cron expression is provided use it - no need to derive it from the other params
-	if params["cron_expression"] != nil {
-		newParams["cron_expression"] = params["cron_expression"]
-		return newParams
-	}
-
-	// Extract time segments (if provided)
-	if params["time"] != nil {
-		timeSegments := strings.Split(params["time"].(string), ":")
-		cronHour = timeSegments[0]
-		cronMinute = timeSegments[1]
-	}
-
-	// Extract numeric value for day (if provided)
-	if params["day"] != nil {
-		cronDay = models.CRON_DAY_MAPPINGS[params["day"].(string)]
-	}
-
-	// Set value of cron expression to be stored (if time or day is provided)
-	if params["time"] != nil || params["day"] != nil {
-		derivedCronExpression = fmt.Sprintf("%v %v * * %v", cronMinute, cronHour, cronDay)
-	}
-
-	if derivedCronExpression != "" {
-		newParams["cron_expression"] = derivedCronExpression
-	}
-
-	return newParams
 }
 
 func RegisterValidators(validate *validator.Validate) error {
