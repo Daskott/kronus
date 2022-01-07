@@ -14,6 +14,7 @@ import (
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
+	"github.com/adhocore/gronx"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
@@ -182,6 +183,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
+	gron := gronx.New()
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -203,6 +205,11 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
 		writeResponse(rw, ResponsePayload{Errors: []string{"active must be a boolean e.g. true/false"}}, http.StatusBadRequest)
+		return
+	}
+
+	if params["cron_expression"] != nil && !gron.IsValid(params["cron_expression"].(string)) {
+		writeResponse(rw, ResponsePayload{Errors: []string{"a valid cron expression is required e.g. '0 18 * * 3'"}}, http.StatusBadRequest)
 		return
 	}
 
