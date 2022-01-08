@@ -134,6 +134,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	removeUnknownFields(params, map[string]bool{
+		"email":        true,
 		"first_name":   true,
 		"last_name":    true,
 		"phone_number": true,
@@ -167,12 +168,24 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if params["email"] != nil {
+		if err := validate.Var(params["email"], "email"); err != nil {
+			errs = append(errs, "valid email is required")
+		}
+	}
+
 	if len(errs) > 0 {
 		writeResponse(rw, ResponsePayload{Errors: errs}, http.StatusBadRequest)
 		return
 	}
 
 	err = currentUser.Update(params)
+
+	if errors.Is(err, models.ErrDuplicateUserEmail) || errors.Is(err, models.ErrDuplicateUserNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return

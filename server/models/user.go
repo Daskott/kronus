@@ -20,7 +20,9 @@ var (
 		"users.updated_at",
 	}
 
-	updatableFields = []string{"first_name",
+	updatableFields = []string{
+		"email",
+		"first_name",
 		"last_name",
 		"phone_number",
 		"password",
@@ -94,7 +96,19 @@ func (user *User) Update(data map[string]interface{}) error {
 		data["password"] = passwordHash
 	}
 
-	return db.Model(&User{}).Where("id = ?", user.ID).Select(updatableFields).Updates(data).Error
+	err := db.Model(&User{}).Where("id = ?", user.ID).Select(updatableFields).Updates(data).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.email") {
+		return ErrDuplicateUserEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.phone_number") {
+		return ErrDuplicateUserNumber
+	}
+
+	return err
 }
 
 func (user *User) UpdateProbSettings(data map[string]interface{}) error {
@@ -148,7 +162,19 @@ func (user *User) LoadProbeSettings() error {
 }
 
 func (user *User) UpdateContact(contactID string, data map[string]interface{}) error {
-	return db.Table("contacts").Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
+	err := db.Table("contacts").Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.email") {
+		return ErrDuplicateContactEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.phone_number") {
+		return ErrDuplicateContactNumber
+	}
+
+	return err
 }
 
 func (user *User) DeleteContact(id interface{}) error {
