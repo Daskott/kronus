@@ -265,7 +265,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser.ProbeSettings}, http.StatusOK)
 }
 
 func createContactHandler(rw http.ResponseWriter, r *http.Request) {
