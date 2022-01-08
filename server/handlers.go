@@ -82,7 +82,9 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	// Remove password field before returning result
+	user.Password = ""
+	writeResponse(rw, ResponsePayload{Success: true, Data: user}, http.StatusOK)
 }
 
 func allUsersHandler(rw http.ResponseWriter, r *http.Request) {
@@ -191,13 +193,12 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser}, http.StatusOK)
 }
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
-	// gron := gronx.New()
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -296,7 +297,7 @@ func createContactHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: contact}, http.StatusOK)
 }
 
 func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
@@ -357,7 +358,7 @@ func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = currentUser.UpdateContact(vars["id"], params)
+	updatedContact, err := currentUser.UpdateContact(vars["id"], params)
 
 	if errors.Is(err, models.ErrDuplicateContactEmail) || errors.Is(err, models.ErrDuplicateContactNumber) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
@@ -369,7 +370,7 @@ func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: updatedContact}, http.StatusOK)
 }
 
 func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {

@@ -80,7 +80,7 @@ func (user *User) CancelAllPendingProbes() error {
 			probeIDs = append(probeIDs, probe.ID)
 		}
 
-		return db.Table("probes").
+		return db.Model(&Probe{}).
 			Where("id IN ?", probeIDs).Update("probe_status_id", cancelledStatus.ID).Error
 	}
 
@@ -96,7 +96,7 @@ func (user *User) Update(data map[string]interface{}) error {
 		data["password"] = passwordHash
 	}
 
-	err := db.Model(&User{}).Where("id = ?", user.ID).Select(updatableFields).Updates(data).Error
+	err := db.Model(user).Select(updatableFields).Updates(data).Error
 
 	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
 		strings.Contains(err.Error(), "users.email") {
@@ -161,20 +161,23 @@ func (user *User) LoadProbeSettings() error {
 	return db.Find(&user.ProbeSettings, "user_id = ?", user.ID).Error
 }
 
-func (user *User) UpdateContact(contactID string, data map[string]interface{}) error {
-	err := db.Table("contacts").Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
+func (user *User) UpdateContact(contactID string, data map[string]interface{}) (*Contact, error) {
+	err := db.Model(&Contact{}).Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
 
 	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
 		strings.Contains(err.Error(), "contacts.email") {
-		return ErrDuplicateContactEmail
+		return nil, ErrDuplicateContactEmail
 	}
 
 	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
 		strings.Contains(err.Error(), "contacts.phone_number") {
-		return ErrDuplicateContactNumber
+		return nil, ErrDuplicateContactNumber
 	}
 
-	return err
+	contact := &Contact{}
+	err = db.Find(contact, contactID).Error
+
+	return contact, err
 }
 
 func (user *User) DeleteContact(id interface{}) error {

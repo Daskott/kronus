@@ -40,7 +40,7 @@ func (job *Job) MarkAsClaimed() (bool, error) {
 }
 
 func (job *Job) Update(data map[string]interface{}) error {
-	return db.Table("jobs").Where("id = ?", job.ID).Updates(data).Error
+	return db.Model(job).Updates(data).Error
 }
 
 func CreateUniqueJobByName(name string, handler string, args string) error {
