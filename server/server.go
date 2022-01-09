@@ -99,10 +99,10 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")
 	adminRouter.HandleFunc("/users", allUsersHandler).Methods("GET")
 
-	adminRouter.HandleFunc("/jobs", jobsByStatusHandler).Methods("GET")
+	adminRouter.HandleFunc("/jobs", fetchJobsHandler).Methods("GET")
 	adminRouter.HandleFunc("/jobs/stats", jobsStatsHandler).Methods("GET")
 	adminRouter.HandleFunc("/probes/stats", probeStatsHandler).Methods("GET")
-	adminRouter.HandleFunc("/probes", probesByStatusHandler).Methods("GET")
+	adminRouter.HandleFunc("/probes", fetchProbesHandler).Methods("GET")
 	adminRouter.Use(adminRouteMiddleware)
 
 	router.HandleFunc("/webhook/sms", smsWebhookHandler).Methods("POST")

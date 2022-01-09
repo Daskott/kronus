@@ -11,11 +11,11 @@ import (
 
 type Probe struct {
 	BaseModel
-	LastResponse   string         `json:"last_response"`
-	RetryCount     int            `json:"retry_count"`
-	EmergencyProbe EmergencyProbe `json:"emergency_probe"`
-	UserID         uint           `json:"user_id" gorm:"not null"`
-	ProbeStatusID  uint           `json:"probe_status_id"`
+	LastResponse   string          `json:"last_response"`
+	RetryCount     int             `json:"retry_count"`
+	EmergencyProbe *EmergencyProbe `json:"emergency_probe,omitempty"`
+	UserID         uint            `json:"user_id" gorm:"not null"`
+	ProbeStatusID  uint            `json:"probe_status_id"`
 }
 
 var ProbeStatusMapToResponse = map[string]map[string]bool{
@@ -73,18 +73,43 @@ func SetProbeStatus(probeID interface{}, status string) error {
 	return nil
 }
 
-func ProbesByStatus(status, order string) ([]Probe, error) {
+func FetchProbesByStatus(status, order string, page int) ([]Probe, *Paging, error) {
+	const JOIN_QUERY = "INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?"
+
+	var total int64
 	probes := []Probe{}
 
-	err := db.Preload("EmergencyProbe").Limit(500).Order(fmt.Sprintf("probes.id %v", order)).Joins(
-		"INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?", status).
-		Find(&probes).Error
-
+	err := db.Joins(JOIN_QUERY, status).Model(&Probe{}).Count(&total).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return probes, nil
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Preload("EmergencyProbe").
+		Order(fmt.Sprintf("probes.id %v", order)).Joins(JOIN_QUERY, status).Find(&probes).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	return probes, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
+}
+
+func FetchProbes(page int) ([]Probe, *Paging, error) {
+	var total int64
+	probes := []Probe{}
+
+	err := db.Model(&Probe{}).Count(&total).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Preload("EmergencyProbe").Order("probes.id desc").Find(&probes).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	return probes, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
 func FindProbe(id interface{}) (*Probe, error) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ type ResponsePayload struct {
 	Errors  []string    `json:"errors,omitempty"`
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
+	Paging  interface{} `json:"paging,omitempty"`
 }
 
 type TokenPayload struct {
@@ -417,9 +419,15 @@ func probeStatsHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true, Data: stats}, http.StatusOK)
 }
 
-func jobsByStatusHandler(rw http.ResponseWriter, r *http.Request) {
+func fetchJobsHandler(rw http.ResponseWriter, r *http.Request) {
+	var jobs []models.Job
+	var paging *models.Paging
+	var err error
+
 	status := strings.ToLower(r.URL.Query().Get("status"))
-	if !models.JobStatusNameMap[status] {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	if status != "" && !models.JobStatusNameMap[status] {
 		writeResponse(rw, ResponsePayload{Errors: []string{
 			fmt.Sprintf("a valid 'status' param is required i.e. %v, %v, %v or %v",
 				models.ENQUEUED_JOB, models.SUCCESSFUL_JOB, models.IN_PROGRESS_JOB, models.DEAD_JOB)},
@@ -427,18 +435,29 @@ func jobsByStatusHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs, err := models.JobsByStatus(status)
+	if status == "" {
+		jobs, paging, err = models.FetchJobs(page)
+	} else {
+		jobs, paging, err = models.FetchJobsByStatus(status, page)
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: jobs}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: jobs, Paging: paging}, http.StatusOK)
 }
 
-func probesByStatusHandler(rw http.ResponseWriter, r *http.Request) {
+func fetchProbesHandler(rw http.ResponseWriter, r *http.Request) {
+	var probes []models.Probe
+	var paging *models.Paging
+	var err error
+
 	status := strings.ToLower(r.URL.Query().Get("status"))
-	if !models.ProbeStatusNameMap[status] {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	if status != "" && !models.ProbeStatusNameMap[status] {
 		writeResponse(rw, ResponsePayload{Errors: []string{
 			fmt.Sprintf("a valid 'status' param is required i.e. %v, %v, %v %v, or %v",
 				models.PENDING_PROBE, models.GOOD_PROBE, models.BAD_PROBE, models.CANCELLED_PROBE, models.UNAVAILABLE_PROBE)},
@@ -446,13 +465,18 @@ func probesByStatusHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	probes, err := models.ProbesByStatus(status, "desc")
+	if status == "" {
+		probes, paging, err = models.FetchProbes(page)
+	} else {
+		probes, paging, err = models.FetchProbesByStatus(status, "desc", page)
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: probes}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: probes, Paging: paging}, http.StatusOK)
 }
 
 func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
