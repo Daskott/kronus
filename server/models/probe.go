@@ -94,17 +94,25 @@ func FetchProbesByStatus(status, order string, page int) ([]Probe, *Paging, erro
 	return probes, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
-func FetchProbes(page int) ([]Probe, *Paging, error) {
+func FetchProbes(page int, query interface{}, args ...interface{}) ([]Probe, *Paging, error) {
 	var total int64
 	probes := []Probe{}
 
-	err := db.Model(&Probe{}).Count(&total).Error
+	countQuery := db.Model(&Probe{})
+	probeQuery := db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Preload("EmergencyProbe").Order("probes.id desc")
+
+	if query != nil && args != nil {
+		countQuery = countQuery.Where(query, args)
+		probeQuery = probeQuery.Where(query, args)
+	}
+
+	err := countQuery.Count(&total).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil, err
 	}
 
-	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
-		Preload("EmergencyProbe").Order("probes.id desc").Find(&probes).Error
+	err = probeQuery.Find(&probes).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil, err
 	}

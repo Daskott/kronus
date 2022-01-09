@@ -54,7 +54,7 @@ func initialContextMiddleware(next http.Handler) http.Handler {
 
 		// 	Add decoded token & requestUserID to request context
 		ctx := context.WithValue(r.Context(), RequestContextKey("decodedJWT"), decodeAndVerifyAuthHeader(r.Header.Get("Authorization")))
-		ctx = context.WithValue(ctx, RequestContextKey("requestUserID"), vars["uid"])
+		ctx = context.WithValue(ctx, RequestContextKey("userID"), vars["uid"])
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

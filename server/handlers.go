@@ -102,7 +102,7 @@ func fetchUsersHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
-	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
+	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("userID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusNotFound)
 		return
@@ -117,7 +117,7 @@ func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
-	err := models.DeleteUser(r.Context().Value(RequestContextKey("requestUserID")))
+	err := models.DeleteUser(r.Context().Value(RequestContextKey("userID")))
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -390,7 +390,20 @@ func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
-func fetchContactsHandler(rw http.ResponseWriter, r *http.Request) {
+func fetchUserProbesHandler(rw http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(RequestContextKey("userID"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	probes, paging, err := models.FetchProbes(page, "user_id = ?", userID)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: probes, Paging: paging}, http.StatusOK)
+}
+
+func fetchUserContactsHandler(rw http.ResponseWriter, r *http.Request) {
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 
@@ -470,7 +483,7 @@ func fetchProbesHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if status == "" {
-		probes, paging, err = models.FetchProbes(page)
+		probes, paging, err = models.FetchProbes(page, nil, nil)
 	} else {
 		probes, paging, err = models.FetchProbesByStatus(status, "desc", page)
 	}
