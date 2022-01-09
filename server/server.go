@@ -97,7 +97,7 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	protectedRouter.Use(protectedRouteMiddleware)
 
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")
-	adminRouter.HandleFunc("/users", allUsersHandler).Methods("GET")
+	adminRouter.HandleFunc("/users", fetchUsersHandler).Methods("GET")
 
 	adminRouter.HandleFunc("/jobs", fetchJobsHandler).Methods("GET")
 	adminRouter.HandleFunc("/jobs/stats", jobsStatsHandler).Methods("GET")

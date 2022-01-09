@@ -89,14 +89,16 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true, Data: user}, http.StatusOK)
 }
 
-func allUsersHandler(rw http.ResponseWriter, r *http.Request) {
-	users, err := models.AllUsersWithProbeSettings()
+func fetchUsersHandler(rw http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	users, paging, err := models.FetchUsers(page)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: users}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: users, Paging: paging}, http.StatusOK)
 }
 
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -390,13 +392,15 @@ func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
 
 func fetchContactsHandler(rw http.ResponseWriter, r *http.Request) {
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
-	err := currentUser.LoadContacts()
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	contacts, paging, err := currentUser.FetchContacts(page)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser.Contacts}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: contacts, Paging: paging}, http.StatusOK)
 }
 
 func jobsStatsHandler(rw http.ResponseWriter, r *http.Request) {

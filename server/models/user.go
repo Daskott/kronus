@@ -34,15 +34,18 @@ var (
 
 type User struct {
 	BaseModel
-	FirstName     string       `json:"first_name" validate:"required"`
-	LastName      string       `json:"last_name" validate:"required"`
-	PhoneNumber   string       `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
-	Email         string       `json:"email" validate:"required,email" gorm:"not null;unique"`
-	Password      string       `json:"password,omitempty" validate:"required,password" gorm:"not null"`
-	RoleID        uint         `json:"role_id" gorm:"null"`
-	ProbeSettings ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Contacts      []Contact    `json:"contacts,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Probes        []Probe      `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	FirstName     string        `json:"first_name" validate:"required"`
+	LastName      string        `json:"last_name" validate:"required"`
+	PhoneNumber   string        `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
+	Email         string        `json:"email" validate:"required,email" gorm:"not null;unique"`
+	Password      string        `json:"password,omitempty" validate:"required,password" gorm:"not null"`
+	RoleID        uint          `json:"role_id" gorm:"null"`
+	ProbeSettings *ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	// These only exist to create the db constraints.
+	// Use helper functions to fetch data instead e.g. FetchContacts
+	Contacts []Contact `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Probes   []Probe   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
 // DisableProbe turns off probe for user & cancels all pending probes
@@ -118,7 +121,7 @@ func (user *User) UpdateProbSettings(data map[string]interface{}) error {
 	}
 
 	// Reload user probe settings
-	return user.LoadProbeSettings()
+	return db.Find(&user.ProbeSettings, "user_id = ?", user.ID).Error
 }
 
 func (user *User) IsAdmin() (bool, error) {
@@ -151,14 +154,22 @@ func (user *User) AddContact(contact *Contact) error {
 	return err
 }
 
-func (user *User) LoadContacts() error {
-	// TODO: Add pagination
-	return db.Limit(500).Find(&user.Contacts, "user_id = ?", user.ID).Error
-}
+func (user *User) FetchContacts(page int) ([]Contact, *Paging, error) {
+	var contacts []Contact
+	var total int64
 
-func (user *User) LoadProbeSettings() error {
-	// TODO: Add pagination
-	return db.Find(&user.ProbeSettings, "user_id = ?", user.ID).Error
+	err := db.Model(&Contact{}).Where("user_id = ?", user.ID).Count(&total).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Find(&contacts, "user_id = ?", user.ID).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	return contacts, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
 func (user *User) UpdateContact(contactID string, data map[string]interface{}) (*Contact, error) {
@@ -242,7 +253,7 @@ func CreateUser(user *User) error {
 	}
 	user.Password = passwordHash
 
-	user.ProbeSettings = ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
+	user.ProbeSettings = &ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
 	err = db.Create(user).Error
 
 	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
@@ -290,17 +301,22 @@ func UsersWithActiveProbe() ([]User, error) {
 	return users, nil
 }
 
-func AllUsersWithProbeSettings() ([]User, error) {
+func FetchUsers(page int) ([]User, *Paging, error) {
+	var total int64
 	users := []User{}
 
-	// TODO: Add pagination
-	err := db.Limit(500).Preload("ProbeSettings").Select(allFieldsExceptPassword).Joins(
-		"INNER JOIN probe_settings ON probe_settings.user_id = users.id").
+	err := db.Model(&User{}).Count(&total).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).Preload("ProbeSettings").
+		Select(allFieldsExceptPassword).Order("users.id desc").
 		Find(&users).Error
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return users, nil
+	return users, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
