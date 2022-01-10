@@ -52,7 +52,7 @@ to remind you to reach out and see how they are doing.
 
 And to checkup on yourself, kronus allows you to schedule a liveliness probe that sends out a message to you every week
 via the kronus server.`,
-		ValidArgs: []string{"touchbase"},
+		ValidArgs: []string{"server"},
 	}
 
 	cmd.PersistentFlags().BoolVarP(&isDevEnv, "dev", "", false, "run in development mode")
