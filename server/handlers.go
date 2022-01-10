@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
-	"github.com/adhocore/gronx"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
@@ -25,6 +25,7 @@ type ResponsePayload struct {
 	Errors  []string    `json:"errors,omitempty"`
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
+	Paging  interface{} `json:"paging,omitempty"`
 }
 
 type TokenPayload struct {
@@ -71,33 +72,35 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 	user.RoleID = role.ID
 
-	// TODO: Handle constraint errors properly
 	err = models.CreateUser(&user)
-	if err != nil {
-		if strings.Contains(err.Error(), "Duplicate") {
-			writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
-			return
-		}
 
+	if errors.Is(err, models.ErrDuplicateUserEmail) || errors.Is(err, models.ErrDuplicateUserNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: user}, http.StatusOK)
 }
 
-func allUsersHandler(rw http.ResponseWriter, r *http.Request) {
-	users, err := models.AllUsersWithProbeSettings()
+func fetchUsersHandler(rw http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	users, paging, err := models.FetchUsers(page)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: users}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: users, Paging: paging}, http.StatusOK)
 }
 
 func findUserHandler(rw http.ResponseWriter, r *http.Request) {
-	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("requestUserID")))
+	user, err := models.FindUserBy("ID", r.Context().Value(RequestContextKey("userID")))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusNotFound)
 		return
@@ -112,7 +115,7 @@ func findUserHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func deleteUserHandler(rw http.ResponseWriter, r *http.Request) {
-	err := models.DeleteUser(r.Context().Value(RequestContextKey("requestUserID")))
+	err := models.DeleteUser(r.Context().Value(RequestContextKey("userID")))
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
@@ -135,6 +138,7 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	removeUnknownFields(params, map[string]bool{
+		"email":        true,
 		"first_name":   true,
 		"last_name":    true,
 		"phone_number": true,
@@ -168,24 +172,35 @@ func updateUserHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if params["email"] != nil {
+		if err := validate.Var(params["email"], "email"); err != nil {
+			errs = append(errs, "valid email is required")
+		}
+	}
+
 	if len(errs) > 0 {
 		writeResponse(rw, ResponsePayload{Errors: errs}, http.StatusBadRequest)
 		return
 	}
 
 	err = currentUser.Update(params)
+
+	if errors.Is(err, models.ErrDuplicateUserEmail) || errors.Is(err, models.ErrDuplicateUserNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser}, http.StatusOK)
 }
 
 func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 	var errs []string
 
-	gron := gronx.New()
 	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
 	params := make(map[string]interface{})
 	decoder := json.NewDecoder(r.Body)
@@ -209,7 +224,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		errs = append(errs, "'active' field must be a boolean e.g. true/false")
 	}
 
-	if params["cron_expression"] != nil && !gron.IsValid(params["cron_expression"].(string)) {
+	if params["cron_expression"] != nil && !isValidCronExpression(params["cron_expression"].(string)) {
 		errs = append(errs, "'cron_expression' field must be valid e.g. '0 18 * * 3'")
 	}
 
@@ -252,7 +267,7 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser.ProbeSettings}, http.StatusOK)
 }
 
 func createContactHandler(rw http.ResponseWriter, r *http.Request) {
@@ -272,14 +287,19 @@ func createContactHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Handle duplicate error properly i.e return 400 instead of 500
 	err = currentUser.AddContact(&contact)
+
+	if errors.Is(err, models.ErrDuplicateContactEmail) || errors.Is(err, models.ErrDuplicateContactNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: contact}, http.StatusOK)
 }
 
 func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
@@ -340,13 +360,19 @@ func updateContactHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = currentUser.UpdateContact(vars["id"], params)
+	updatedContact, err := currentUser.UpdateContact(vars["id"], params)
+
+	if errors.Is(err, models.ErrDuplicateContactEmail) || errors.Is(err, models.ErrDuplicateContactNumber) {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusBadRequest)
+		return
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: updatedContact}, http.StatusOK)
 }
 
 func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
@@ -362,15 +388,30 @@ func deleteUserContactHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true}, http.StatusOK)
 }
 
-func fetchContactsHandler(rw http.ResponseWriter, r *http.Request) {
-	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
-	err := currentUser.LoadContacts()
+func fetchUserProbesHandler(rw http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(RequestContextKey("userID"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	probes, paging, err := models.FetchProbes(page, "user_id = ?", userID)
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: currentUser.Contacts}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: probes, Paging: paging}, http.StatusOK)
+}
+
+func fetchUserContactsHandler(rw http.ResponseWriter, r *http.Request) {
+	currentUser := r.Context().Value(RequestContextKey("currentUser")).(*models.User)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	contacts, paging, err := currentUser.FetchContacts(page)
+	if err != nil {
+		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeResponse(rw, ResponsePayload{Success: true, Data: contacts, Paging: paging}, http.StatusOK)
 }
 
 func jobsStatsHandler(rw http.ResponseWriter, r *http.Request) {
@@ -393,9 +434,15 @@ func probeStatsHandler(rw http.ResponseWriter, r *http.Request) {
 	writeResponse(rw, ResponsePayload{Success: true, Data: stats}, http.StatusOK)
 }
 
-func jobsByStatusHandler(rw http.ResponseWriter, r *http.Request) {
+func fetchJobsHandler(rw http.ResponseWriter, r *http.Request) {
+	var jobs []models.Job
+	var paging *models.Paging
+	var err error
+
 	status := strings.ToLower(r.URL.Query().Get("status"))
-	if !models.JobStatusNameMap[status] {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	if status != "" && !models.JobStatusNameMap[status] {
 		writeResponse(rw, ResponsePayload{Errors: []string{
 			fmt.Sprintf("a valid 'status' param is required i.e. %v, %v, %v or %v",
 				models.ENQUEUED_JOB, models.SUCCESSFUL_JOB, models.IN_PROGRESS_JOB, models.DEAD_JOB)},
@@ -403,18 +450,29 @@ func jobsByStatusHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs, err := models.JobsByStatus(status)
+	if status == "" {
+		jobs, paging, err = models.FetchJobs(page)
+	} else {
+		jobs, paging, err = models.FetchJobsByStatus(status, page)
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: jobs}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: jobs, Paging: paging}, http.StatusOK)
 }
 
-func probesByStatusHandler(rw http.ResponseWriter, r *http.Request) {
+func fetchProbesHandler(rw http.ResponseWriter, r *http.Request) {
+	var probes []models.Probe
+	var paging *models.Paging
+	var err error
+
 	status := strings.ToLower(r.URL.Query().Get("status"))
-	if !models.ProbeStatusNameMap[status] {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+
+	if status != "" && !models.ProbeStatusNameMap[status] {
 		writeResponse(rw, ResponsePayload{Errors: []string{
 			fmt.Sprintf("a valid 'status' param is required i.e. %v, %v, %v %v, or %v",
 				models.PENDING_PROBE, models.GOOD_PROBE, models.BAD_PROBE, models.CANCELLED_PROBE, models.UNAVAILABLE_PROBE)},
@@ -422,13 +480,18 @@ func probesByStatusHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	probes, err := models.ProbesByStatus(status, "desc")
+	if status == "" {
+		probes, paging, err = models.FetchProbes(page, nil, nil)
+	} else {
+		probes, paging, err = models.FetchProbesByStatus(status, "desc", page)
+	}
+
 	if err != nil {
 		writeResponse(rw, ResponsePayload{Errors: []string{err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeResponse(rw, ResponsePayload{Success: true, Data: probes}, http.StatusOK)
+	writeResponse(rw, ResponsePayload{Success: true, Data: probes, Paging: paging}, http.StatusOK)
 }
 
 func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {

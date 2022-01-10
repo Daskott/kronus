@@ -70,7 +70,7 @@ kronus server --config=config.yml
 ### API and Usage
 
 #### Create user
-- `POST` **/users** <br/>The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
+- `POST` **/v1/users** <br/>The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
   <br/>A default `probe_settings` is created for the user account, and `active` is set to `false`.
   ```json
   {
@@ -92,7 +92,7 @@ kronus server --config=config.yml
   ```
 
 #### Create contact
-- `POST` **/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
+- `POST` **/v1/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
   ```json
   {
       "first_name": "strongest",
@@ -104,7 +104,7 @@ kronus server --config=config.yml
   ```
 
 #### Update probe settings
-- `PUT` **/users/{uid}/probe_settings/** <br/> Set how often you'd like to get a probe message with a `cron_expression` and use `active` to enable/disable probe.
+- `PUT` **/v1/users/{uid}/probe_settings/** <br/> Set how often you'd like to get a probe message with a `cron_expression` and use `active` to enable/disable probe.
   ```json
   {
       "cron_expression": "0 18 * * */1",
@@ -119,17 +119,18 @@ kronus server --config=config.yml
 | `POST` | **/webhook/sms** | For twilio message webhook |
 | `GET` | **/jwks** | For validating kronus server jwts |
 | `GET` | **/health** | To check service health |
-| `GET` | **/users/{uid}**| Can only GET your own record, except if you're admin |
-| `PUT` |**/users/{uid}**| Can only UPDATE own record |
-| `DELETE` |**/users/{uid}**| Can only DELETE your own record, except if you're admin |
-| `GET` |**/users/{uid}/contacts**| Fetch all contacts for the given user id i.e. `uid` |
-| `PUT` |**/users/{uid}/contacts/{id}**| Update contact for a user |
-| `DELETE` |**/users/{uid}/contacts/{id}**| Delete user contact |
-| `GET` | **/users** | Fetch all users ***[admin-only]*** |
-| `GET` | **/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` - ***[admin-only]***|
-| `GET` | **/jobs?status=** | Fetch jobs by status where status could be `enqueued`, `successful`, `in-progress` or `dead` - ***[admin-only]***|
-| `GET` | **/probes/stats** | Get job stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
-| `GET` | **/probes?status=** | Fetch probes by status where status could be  `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
+| `GET` | **/v1/users/{uid}**| Can only GET your own record, except if you're admin |
+| `PUT` |**/v1/users/{uid}**| Can only UPDATE own record |
+| `DELETE` |**/v1/users/{uid}**| Can only DELETE your own record, except if you're admin |
+| `GET` |**/v1/users/{uid}/contacts**| Fetch all contacts for a given user where `uid` is the user id. Supports optional `page` filter for pagination|
+| `GET` |**/v1/users/{uid}/probes**| Fetch all probes for a given user where `uid` is the user id. Supports optional `page` filter for pagination |
+| `PUT` |**/v1/users/{uid}/contacts/{id}**| Update contact for a user |
+| `DELETE` |**/v1/users/{uid}/contacts/{id}**| Delete user contact |
+| `GET` | **/v1/users** | Fetch all users. Supports optional `page` filter for pagination ***[admin-only]*** |
+| `GET` | **/v1/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` - ***[admin-only]***|
+| `GET` | **/v1/jobs?status=** | Fetch jobs with optional filter - *status* which could be `enqueued`, `successful`, `in-progress` or `dead`. Also supports pagination - ***[admin-only]***|
+| `GET` | **/v1/probes/stats** | Get probe stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
+| `GET` | **/v1/probes?status=** | Fetch probes with optional filter - *status* which could be  `pending`, `good`, `bad` `cancelled`, or `unavailable`. Also supports pagination - ***[admin-only]***|
 
 ## Design Concepts
 ### Probes

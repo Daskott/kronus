@@ -15,6 +15,7 @@ import (
 	"github.com/Daskott/kronus/server/models"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/utils"
+	"github.com/go-co-op/gocron"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
 )
@@ -24,16 +25,17 @@ import (
 // --------------------------------------------------------------------------------//
 
 func writeResponse(rw http.ResponseWriter, payLoad ResponsePayload, statusCode int) {
+	rw.WriteHeader(statusCode)
+	json.NewEncoder(rw).Encode(payLoad)
+
 	if statusCode >= http.StatusInternalServerError {
 		logg.Error(payLoad.Errors)
+		return
 	}
 
 	if statusCode >= http.StatusBadRequest {
 		logg.Info(payLoad.Errors)
 	}
-
-	rw.WriteHeader(statusCode)
-	json.NewEncoder(rw).Encode(payLoad)
 }
 
 func writeErrMsgForSmsWebhook(rw http.ResponseWriter, err error) {
@@ -154,6 +156,11 @@ func canAccessUserResource(r *http.Request, userClaims *auth.KronusTokenClaims) 
 	}
 
 	return true
+}
+
+func isValidCronExpression(expression string) bool {
+	_, err := gocron.NewScheduler(time.UTC).Cron(expression).Do(func() {})
+	return err == nil
 }
 
 // ---------------------------------------------------------------------------------//

@@ -7,9 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var (
-	ErrDuplicateJob = errors.New("job with the given name already exists in queue")
-)
+var ErrDuplicateJob = errors.New("job with the given name already exists in queue")
 
 type Job struct {
 	BaseModel
@@ -42,7 +40,7 @@ func (job *Job) MarkAsClaimed() (bool, error) {
 }
 
 func (job *Job) Update(data map[string]interface{}) error {
-	return db.Table("jobs").Where("id = ?", job.ID).Updates(data).Error
+	return db.Model(job).Updates(data).Error
 }
 
 func CreateUniqueJobByName(name string, handler string, args string) error {
@@ -93,18 +91,41 @@ func LastJob(status string, claimed bool) (*Job, error) {
 	return &job, nil
 }
 
-func JobsByStatus(status string) ([]Job, error) {
+func FetchJobsByStatus(status string, page int) ([]Job, *Paging, error) {
+	const JOIN_QUERY = "INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id AND job_statuses.name = ?"
+
+	var total int64
 	jobs := []Job{}
 
-	// TODO: Add pagination
-	err := db.Limit(500).
-		Order("jobs.id desc").Joins("INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id AND job_statuses.name = ?", status).
-		Find(&jobs).Error
+	err := db.Joins(JOIN_QUERY, status).Model(&Job{}).Count(&total).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return jobs, nil
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).Order("jobs.id desc").Joins(JOIN_QUERY, status).
+		Find(&jobs).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	return jobs, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
+}
+
+func FetchJobs(page int) ([]Job, *Paging, error) {
+	var total int64
+	jobs := []Job{}
+
+	err := db.Model(&Job{}).Count(&total).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).Order("jobs.id desc").Find(&jobs).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	return jobs, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
 func CurrentJobsStats() (*JobsStats, error) {

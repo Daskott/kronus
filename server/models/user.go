@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Daskott/kronus/server/auth"
 	"gorm.io/gorm"
@@ -19,24 +20,32 @@ var (
 		"users.updated_at",
 	}
 
-	updatableFields = []string{"first_name",
+	updatableFields = []string{
+		"email",
+		"first_name",
 		"last_name",
 		"phone_number",
 		"password",
 	}
+
+	ErrDuplicateUserEmail  = errors.New("user with the same 'email' already exist")
+	ErrDuplicateUserNumber = errors.New("user with the same 'phone_number' already exist")
 )
 
 type User struct {
 	BaseModel
-	FirstName     string       `json:"first_name" validate:"required"`
-	LastName      string       `json:"last_name" validate:"required"`
-	PhoneNumber   string       `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
-	Email         string       `json:"email" validate:"required,email" gorm:"not null;unique"`
-	Password      string       `json:"password,omitempty" validate:"required,password" gorm:"not null"`
-	RoleID        uint         `json:"role_id" gorm:"null"`
-	ProbeSettings ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Contacts      []Contact    `json:"contacts,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Probes        []Probe      `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	FirstName     string        `json:"first_name" validate:"required"`
+	LastName      string        `json:"last_name" validate:"required"`
+	PhoneNumber   string        `json:"phone_number" validate:"required,e164" gorm:"not null;unique"`
+	Email         string        `json:"email" validate:"required,email" gorm:"not null;unique"`
+	Password      string        `json:"password,omitempty" validate:"required,password" gorm:"not null"`
+	RoleID        uint          `json:"role_id" gorm:"null"`
+	ProbeSettings *ProbeSetting `json:"probe_settings,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	// These only exist to create the db constraints.
+	// Use helper functions to fetch data instead e.g. FetchContacts
+	Contacts []Contact `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Probes   []Probe   `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
 // DisableProbe turns off probe for user & cancels all pending probes
@@ -74,7 +83,7 @@ func (user *User) CancelAllPendingProbes() error {
 			probeIDs = append(probeIDs, probe.ID)
 		}
 
-		return db.Table("probes").
+		return db.Model(&Probe{}).
 			Where("id IN ?", probeIDs).Update("probe_status_id", cancelledStatus.ID).Error
 	}
 
@@ -90,7 +99,19 @@ func (user *User) Update(data map[string]interface{}) error {
 		data["password"] = passwordHash
 	}
 
-	return db.Model(&User{}).Where("id = ?", user.ID).Select(updatableFields).Updates(data).Error
+	err := db.Model(user).Select(updatableFields).Updates(data).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.email") {
+		return ErrDuplicateUserEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.phone_number") {
+		return ErrDuplicateUserNumber
+	}
+
+	return err
 }
 
 func (user *User) UpdateProbSettings(data map[string]interface{}) error {
@@ -100,7 +121,7 @@ func (user *User) UpdateProbSettings(data map[string]interface{}) error {
 	}
 
 	// Reload user probe settings
-	return user.LoadProbeSettings()
+	return db.Find(&user.ProbeSettings, "user_id = ?", user.ID).Error
 }
 
 func (user *User) IsAdmin() (bool, error) {
@@ -118,21 +139,56 @@ func (user *User) IsAdmin() (bool, error) {
 
 func (user *User) AddContact(contact *Contact) error {
 	contact.UserID = user.ID
-	return db.Create(contact).Error
+	err := db.Create(contact).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.email") {
+		return ErrDuplicateContactEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.phone_number") {
+		return ErrDuplicateContactNumber
+	}
+
+	return err
 }
 
-func (user *User) LoadContacts() error {
-	// TODO: Add pagination
-	return db.Limit(500).Find(&user.Contacts, "user_id = ?", user.ID).Error
+func (user *User) FetchContacts(page int) ([]Contact, *Paging, error) {
+	var contacts []Contact
+	var total int64
+
+	err := db.Model(&Contact{}).Where("user_id = ?", user.ID).Count(&total).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Find(&contacts, "user_id = ?", user.ID).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	return contacts, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
-func (user *User) LoadProbeSettings() error {
-	// TODO: Add pagination
-	return db.Find(&user.ProbeSettings, "user_id = ?", user.ID).Error
-}
+func (user *User) UpdateContact(contactID string, data map[string]interface{}) (*Contact, error) {
+	err := db.Model(&Contact{}).Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
 
-func (user *User) UpdateContact(contactID string, data map[string]interface{}) error {
-	return db.Table("contacts").Where("id = ? AND user_id = ?", contactID, user.ID).Updates(data).Error
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.email") {
+		return nil, ErrDuplicateContactEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "contacts.phone_number") {
+		return nil, ErrDuplicateContactNumber
+	}
+
+	contact := &Contact{}
+	err = db.Find(contact, contactID).Error
+
+	return contact, err
 }
 
 func (user *User) DeleteContact(id interface{}) error {
@@ -197,8 +253,23 @@ func CreateUser(user *User) error {
 	}
 	user.Password = passwordHash
 
-	user.ProbeSettings = ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
-	return db.Create(user).Error
+	user.ProbeSettings = &ProbeSetting{CronExpression: DEFAULT_PROBE_CRON_EXPRESSION}
+	err = db.Create(user).Error
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.email") {
+		return ErrDuplicateUserEmail
+	}
+
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint") &&
+		strings.Contains(err.Error(), "users.phone_number") {
+		return ErrDuplicateUserNumber
+	}
+
+	// Clear password field after creating user record, so it's not exported
+	user.Password = ""
+
+	return err
 }
 
 func DeleteUser(id interface{}) error {
@@ -233,17 +304,22 @@ func UsersWithActiveProbe() ([]User, error) {
 	return users, nil
 }
 
-func AllUsersWithProbeSettings() ([]User, error) {
+func FetchUsers(page int) ([]User, *Paging, error) {
+	var total int64
 	users := []User{}
 
-	// TODO: Add pagination
-	err := db.Limit(500).Preload("ProbeSettings").Select(allFieldsExceptPassword).Joins(
-		"INNER JOIN probe_settings ON probe_settings.user_id = users.id").
+	err := db.Model(&User{}).Count(&total).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).Preload("ProbeSettings").
+		Select(allFieldsExceptPassword).Order("users.id desc").
 		Find(&users).Error
 
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return users, nil
+	return users, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }

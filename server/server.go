@@ -76,8 +76,10 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	probeScheduler.ScheduleProbes()
 
 	router := mux.NewRouter()
-	protectedRouter := router.NewRoute().Subrouter()
-	adminRouter := router.NewRoute().Subrouter()
+
+	v1Router := router.PathPrefix("/v1").Subrouter()
+	protectedRouter := v1Router.NewRoute().Subrouter()
+	adminRouter := v1Router.NewRoute().Subrouter()
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%v", config.Kronus.Listener.Port),
@@ -90,19 +92,21 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/probe_settings", updateProbeSettingsHandler).Methods("PUT")
 
-	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts", fetchContactsHandler).Methods("GET")
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/probes", fetchUserProbesHandler).Methods("GET")
+
+	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts", fetchUserContactsHandler).Methods("GET")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts", createContactHandler).Methods("POST")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts/{id:[0-9]+}", updateContactHandler).Methods("PUT")
 	protectedRouter.HandleFunc("/users/{uid:[0-9]+}/contacts/{id:[0-9]+}", deleteUserContactHandler).Methods("DELETE")
 	protectedRouter.Use(protectedRouteMiddleware)
 
 	adminRouter.HandleFunc("/users", createUserHandler).Methods("POST")
-	adminRouter.HandleFunc("/users", allUsersHandler).Methods("GET")
+	adminRouter.HandleFunc("/users", fetchUsersHandler).Methods("GET")
 
-	adminRouter.HandleFunc("/jobs", jobsByStatusHandler).Methods("GET")
+	adminRouter.HandleFunc("/jobs", fetchJobsHandler).Methods("GET")
 	adminRouter.HandleFunc("/jobs/stats", jobsStatsHandler).Methods("GET")
 	adminRouter.HandleFunc("/probes/stats", probeStatsHandler).Methods("GET")
-	adminRouter.HandleFunc("/probes", probesByStatusHandler).Methods("GET")
+	adminRouter.HandleFunc("/probes", fetchProbesHandler).Methods("GET")
 	adminRouter.Use(adminRouteMiddleware)
 
 	router.HandleFunc("/webhook/sms", smsWebhookHandler).Methods("POST")

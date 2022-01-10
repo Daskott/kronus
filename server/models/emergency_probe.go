@@ -4,8 +4,8 @@ import "time"
 
 type EmergencyProbe struct {
 	BaseModel
-	ContactID uint `json:"contact_id"`
-	ProbeID   uint `json:"probe_id"`
+	ContactID uint `json:"contact_id,omitempty"`
+	ProbeID   uint `json:"probe_id,omitempty"`
 }
 
 func CreateEmergencyProbe(probeID, contactID interface{}) error {
