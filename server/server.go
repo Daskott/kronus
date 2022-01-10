@@ -76,6 +76,7 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	probeScheduler.ScheduleProbes()
 
 	router := mux.NewRouter()
+
 	v1Router := router.PathPrefix("/v1").Subrouter()
 	protectedRouter := v1Router.NewRoute().Subrouter()
 	adminRouter := v1Router.NewRoute().Subrouter()
