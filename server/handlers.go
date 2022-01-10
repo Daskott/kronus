@@ -84,8 +84,6 @@ func createUserHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove password field before returning result
-	user.Password = ""
 	writeResponse(rw, ResponsePayload{Success: true, Data: user}, http.StatusOK)
 }
 

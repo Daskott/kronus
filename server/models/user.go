@@ -266,6 +266,9 @@ func CreateUser(user *User) error {
 		return ErrDuplicateUserNumber
 	}
 
+	// Clear password field after creating user record, so it's not exported
+	user.Password = ""
+
 	return err
 }
 
