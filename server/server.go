@@ -76,8 +76,9 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	probeScheduler.ScheduleProbes()
 
 	router := mux.NewRouter()
-	protectedRouter := router.NewRoute().Subrouter()
-	adminRouter := router.NewRoute().Subrouter()
+	v1Router := router.PathPrefix("/v1").Subrouter()
+	protectedRouter := v1Router.NewRoute().Subrouter()
+	adminRouter := v1Router.NewRoute().Subrouter()
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%v", config.Kronus.Listener.Port),
