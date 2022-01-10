@@ -44,14 +44,8 @@ func init() {
 func createRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "kronus",
-		Short: `kronus is a CLI library for Go that allows you to create
-appointments to check in with your contacts and also yourself(i.e a liveliness probe).
-
-To keep in touch with contacts, kronus enables you to generate recurring google calender events for each of your contacts,
-to remind you to reach out and see how they are doing.
-
-And to checkup on yourself, kronus allows you to schedule a liveliness probe that sends out a message to you every week
-via the kronus server.`,
+		Short: `kronus is a CLI App that lets you run liveliness probes
+for users on its server.`,
 		ValidArgs: []string{"server"},
 	}
 
