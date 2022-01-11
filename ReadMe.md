@@ -35,9 +35,9 @@ Use "kronus [command] --help" for more information about a command.
 
 ### Dependencies
 - Install [Go](https://golang.org/dl/)
-- [Twilio account](https://www.twilio.com/) credentials - for sending probe
-  messages
-- [Google application credentials](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-console) for [cloud storage](https://cloud.google.com/storage) - (Optional - for sqlite file backup)
+- [Twilio](https://www.twilio.com/) sms webhook(use POST `/webhook/sms` endpoint) and credentials for
+  sending probe messages.
+- [Google application credentials](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-console) for [cloud storage](https://cloud.google.com/storage) - (Optional - for sqlite file backup).
 
 ### Install
 ```
