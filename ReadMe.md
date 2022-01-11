@@ -1,30 +1,24 @@
-# Kronus
-A CLI App to help you stay in touch with your contacts, as well as yourself 🙃. The two main features/cmd:
-- `touchbase` 
-  - create recurring google events as a reminder to reach out to contacts
-  - You can create `touchbase` events for contacts in any group, up to a Max of **7** contacts.
-- `server` 
-  - enables liveliness probe for users on the server. It's still in pre-alpha, so a lot can change about it's implementation & features
-  - [See doc](Server.md) if you want to test out this feature.
+## Kronus
+Kronus is a tool for sending and asessing user liveness probes.
+
+Its key features are:
+- **Sending Liveliness Probes:** The kronus server sends out probes to users on the
+  server and based on their response determines their "aliveness".
+- **Contact Emergency Contact:** When the service doesn't get a response back
+  from a user or gets a `bad` response, the user's emergency contact is alerted.
+- **Robust API:** Allow developers to add extra functionality based on a user's
+  "aliveness". A user's `probes` can be queried periodically from kronus server
+  to see the `status` of the last probe. And based on that, do whatever the
+  developer wants
 
 ```
-kronus is a CLI library for Go that allows you to create
-appointments to check in with your contacts and also yourself(i.e liveliness probe).
-
-To keep in touch with contacts, kronus enables you to generate recurring google calender events for each of your contacts,
-to remind you to reach out and see how they are doing.
-
-And to checkup on yourself, kronus allows you to schedule a liveliness probe that sends out a message to you every week
-via kronus server.
-
 Usage:
   kronus [command]
 
 Available Commands:
   completion  generate the autocompletion script for the specified shell
   help        Help about any command
-  server      Start a kronus server (pre-alpha)
-  touchbase   Deletes previous touchbase events and creates new ones based on configs
+  server      Start a kronus server
 
 Flags:
       --dev       run in development mode
@@ -36,91 +30,143 @@ Flags:
 Use "kronus [command] --help" for more information about a command.
   ```
 
-## Pre-requisite for touchbase cmd
+### Dependencies
 - Install [Go](https://golang.org/dl/)
-- Create a google cloud project with permission to access google calendar. [See docs](https://cloud.google.com/resource-manager/docs/creating-managing-projects)
-- Create a service account to use with app. [See docs](https://cloud.google.com/iam/docs/creating-managing-service-accounts)
-- Share your calendar with the service account email. Change the permission settings to `'Make changes to events'`. Save Changes.
-- Make sure `GOOGLE_APPLICATION_CREDENTIALS` is set in the environment you run `kronus`(or update `$HOME/.kronus.yaml` accordingly - see below). E.g:
-  ```
-  export GOOGLE_APPLICATION_CREDENTIALS="/home/user/Downloads/service-account-file.json"
-  ```
+- [Twilio account](https://www.twilio.com/) credentials - for sending probe
+  messages
+- [Google application credentials](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-console) for [cloud storage](https://cloud.google.com/storage) - (Optional - for sqlite file backup)
 
-## How to use it
-- Install:
-  ```
-  go get -u github.com/Daskott/kronus
-  ```
-- Run `kronus touchbase --group=<group_name>` to create re-curring event on google calendar
-- For help run `kronus touchbase --help`
-  ```
-  Deletes previous touchbase google calender events created by kronus
-  and creates new ones(up to a max of 7 contacts for a group) to match the values set in .kronus.yaml
+### Install
+```
+go get -u github.com/Daskott/kronus
+```
 
-  Usage:
-    kronus touchbase [flags]
+### Server Config
+The server requires a valid `config.yml` configuration file as shown below:
+```yml
+kronus:
+  # A valid RSA private key for creating/validating kronus server jwts
+  # You can can use this https://mkjwk.org/ to generate one
+  privateKeyPem:
 
-  Flags:
-        --config string      config file (default is $HOME/.kronus.yaml)
-    -c, --count int          how many times you want to touchbase with members of a group (default 4)
-    -f, --freq int           how often you want to touchbase i.e. 0 - weekly, 1 - bi-weekly, or 2 - monthly (default 1)
-    -g, --group string       group to create touchbase events for
-    -h, --help               help for touchbase
-    -t, --time-slot string   time slot in the day allocated for touching base (default "18:00-18:30")
-
-  Global Flags:
-        --dev    run in development mode
-        --test   run in test mode
-  ```
-
-## Configuration for `touchbase` cmd
-The config file is created in `$HOME/.kronus.yaml` if you've run the App at least once.
-
-You can also create the config file manually in the default path if you choose. Or a new path & tell `kronus` where to find it using the `--config` flag.
-
-Update config to include your `timezone`, `contacts` & `groups`. 
-  ```yml
-  settings:
-    # Update the timezone to match yours e.g.
-    # America/New_York
-    # America/Vancouver
-    # America/Los_Angeles
-    # Go to http://www.timezoneconverter.com/cgi-bin/findzone to see others.
-    timezone: "America/Toronto"
-    
-    # Leave as is, to avoid unexpected behaviour. 
-    touchbase-recurrence: "RRULE:FREQ=WEEKLY;"
-
-  # Here you update your contact list with their names.
-  # e.g.
-  contacts:
-    - name: Smally
-    - name: Dad
-
-  # Here you add the different groups you'd like to have for your
-  # contacts. And populate each group with 
-  # each contact's id(i.e. index of their record in contacts)
-  # e.g. 
-  groups:
-    friends:
-      - 0
-      - 1
-    family:
-      - 0
-
-  # This section is automatically updated by the CLI App to manage
-  # events created by kronus
-  events:
-
-  owner:
-    email: <The email associated with your google calendar>
+  # If deployed to a production env, the public url of the server.
+  # It's required, as this will be used for the twilio webhook 
+  publicUrl: "https://my-app.com"
   
-  # For API secrets. This is mostly for convienece. In a production environment, pass GOOGLE_APPLICATION_CREDENTIALS directly into the env and kronus will override whatever is in here.
-  secrets:
-    GOOGLE_APPLICATION_CREDENTIALS: <Path to the JSON file that contains your service account key>
+  cron:
+    # Timezone to use for scheduling probes
+    timeZone: "America/Toronto"
+  
+  listener:
+    port: 3900
+
+sqlite:
+  passPhrase: passphrase
+
+google:
+  storage:
+    bucket: "gstorage-bucket-name"
+
+    # The folder/path to store backup files
+    prefix: "kronus"
+    
+    # How often you want your sqlite db to be backed up to google storage in cron format
+    sqliteBackupSchedule: "0 * * * *"
+
+    enableSqliteBackupAndSync: true
+  
+  # The path to google service account credentials. You may not need to set this, if the
+  # kronus server is deployed to a google compute engine instance - the default credentials may be used instead.
+  applicationCredentials: "/path/to/google/credentials"
+
+twilio:
+  accountSid: AHKX00SXXXXXXXXXXXXXXXXXXX
+  authToken: BHKX00SXXXXXXXXXXXXXXXXXXX
+  messagingServiceSid: CHKX00SXXXXXXXXXXXXXXXXXXX
+```
+
+### Start server in dev mode
+```
+kronus server --dev
+```
+
+### Start server with config
+```
+kronus server --config=config.yml
+```
+
+### Setup steps
+- [Create a user](#create-user) account
+- [Get access token](#get-access-token) for protected routes
+- [Add a contact](#create-contact) and set as user's emergency contact
+- Finally [turn on the emergency probe](#update-probe-settings)
+
+### API and Usage
+
+#### Create user
+- `POST` **/v1/users** <br/>The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
+  <br/>A default `probe_settings` is created for the user account, and `active` is set to `false`.
+  ```json
+  {
+      "first_name": "tony",
+      "last_name": "stark",
+      "email": "stark@avengers.com",
+      "password": "very-secure",
+      "phone_number": "+12345678900"
+  }
   ```
 
-## Development
+#### Get access token
+- `POST` **/login** <br/> Get access `token` which will be used to query protected resources 
+  ```json
+  {
+      "email": "stark@avengers.com",
+      "password": "very-secure"
+  }
+  ```
+
+#### Create contact
+- `POST` **/v1/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
+  ```json
+  {
+      "first_name": "strongest",
+      "last_name": "avenger",
+      "phone_number": "+12345678900",
+      "email": "hulk@avengers.com",
+      "is_emergency_contact": true
+  }
+  ```
+
+#### Update probe settings
+- `PUT` **/v1/users/{uid}/probe_settings/** <br/> Set how often you'd like to get a probe message with a `cron_expression` and use `active` to enable/disable probe.
+  ```json
+  {
+      "cron_expression": "0 18 * * */1",
+      "active": true
+  }
+  ```
+
+#### Other routes
+
+| Method | Route | Note |
+| --- | --- | --- |
+| `POST` | **/webhook/sms** | For twilio message webhook |
+| `GET` | **/jwks** | For validating kronus server jwts |
+| `GET` | **/health** | To check service health |
+| `GET` | **/v1/users/{uid}**| Can only GET your own record, except if you're admin |
+| `PUT` |**/v1/users/{uid}**| Can only UPDATE own record |
+| `DELETE` |**/v1/users/{uid}**| Can only DELETE your own record, except if you're admin |
+| `GET` |**/v1/users/{uid}/contacts**| Fetch all contacts for a given user where `uid` is the user id. Supports optional `page` filter for pagination|
+| `GET` |**/v1/users/{uid}/probes**| Fetch all probes for a given user where `uid` is the user id. Supports optional `page` filter for pagination |
+| `PUT` |**/v1/users/{uid}/contacts/{id}**| Update contact for a user |
+| `DELETE` |**/v1/users/{uid}/contacts/{id}**| Delete user contact |
+| `GET` | **/v1/users** | Fetch all users. Supports optional `page` filter for pagination ***[admin-only]*** |
+| `GET` | **/v1/jobs/stats** | Get job stats i.e. no of jobs in each group e.g. `enqueued`, `successful`, `in-progress` or `dead` - ***[admin-only]***|
+| `GET` | **/v1/jobs?status=** | Fetch jobs with optional filter - *status* which could be `enqueued`, `successful`, `in-progress` or `dead`. Also supports pagination - ***[admin-only]***|
+| `GET` | **/v1/probes/stats** | Get probe stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
+| `GET` | **/v1/probes?status=** | Fetch probes with optional filter - *status* which could be  `pending`, `good`, `bad` `cancelled`, or `unavailable`. Also supports pagination - ***[admin-only]***|
+
+### Development
 - Checkout repo: 
   ```
   git clone https://github.com/Daskott/kronus.git
@@ -129,16 +175,16 @@ Update config to include your `timezone`, `contacts` & `groups`.
   ```
   go run main.go
   ```
-- To run `touchbaseCmd`: 
+- To run `server`: 
   ```
-  go run main.go touchbase --dev
+  go run main.go server --dev
   ```
 - To run tests: 
   ```
   make test
   ```
 
-## Publishing package
+### Publishing package
 * Update `Version` in `version.go`
 * Commit changes:
   ```
@@ -149,3 +195,30 @@ Update config to include your `timezone`, `contacts` & `groups`.
   make release VERSION=0.3.2
   ```
 For more info see detailed steps https://golang.org/doc/modules/publishing
+
+## Design Concepts
+### Probes
+- Probes are events used to identify when a user has been contacted by the service to check on their aliveness.
+- A probe can be in 5 possible states: 
+    - `pending` - The server has sent out a probe message to the user & is awaiting a response e.g. `"Are you okay Stark?"`
+    - `good` - The server has gotten a valid response for good i.e `Yes`, `Yeah`, `Yh` or `Y`
+    - `bad` - The server has gotten a valid response for bad i.e `No`, `Nope`, `Nah` or `N`
+    - `cancelled` - The probe was cancelled by the user via the rest API
+    - `unavailable` - The server did not receive any response after multiple retries i.e `"You good ??"`
+- In both a `bad` or `unavailable` state the server sends out a message to the
+  user's emergency contact and then disables the probe.
+
+## FAQ
+- Q: Does this work in a distributed environment ?
+    - A: No. This doesn't work in a distributed environment at the moment, because the server uses Sqlite3 to store all it's data.
+         As a result, if you deploy this to a production environment, it should run on a single pod/machine.
+
+- Q: Why SQLite ?
+    - A1: I don't want to pay for a hosted database 😅
+    - A2: For ease of use, as you don't require a lot of external systems to get started. For data protection, the SQLite file is encrypted using the provided `passPhrase` with AES-256, see https://github.com/sqlcipher/sqlcipher.
+
+- Q: Is this a dead man's switch ?
+    - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
+
+- Q: Why ?
+    - A: Why not ? It was/is a fun project to learn more `Go` and design/architecture patterns

@@ -16,6 +16,7 @@ type Probe struct {
 	EmergencyProbe *EmergencyProbe `json:"emergency_probe,omitempty"`
 	UserID         uint            `json:"user_id" gorm:"not null"`
 	ProbeStatusID  uint            `json:"probe_status_id"`
+	ProbeStatus    *ProbeStatus    `json:"status"`
 }
 
 var ProbeStatusMapToResponse = map[string]map[string]bool{
@@ -85,6 +86,7 @@ func FetchProbesByStatus(status, order string, page int) ([]Probe, *Paging, erro
 	}
 
 	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Preload("ProbeStatus").
 		Preload("EmergencyProbe").
 		Order(fmt.Sprintf("probes.id %v", order)).Joins(JOIN_QUERY, status).Find(&probes).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -100,7 +102,7 @@ func FetchProbes(page int, query interface{}, args ...interface{}) ([]Probe, *Pa
 
 	countQuery := db.Model(&Probe{})
 	probeQuery := db.Scopes(paginate(page, MAX_PAGE_SIZE)).
-		Preload("EmergencyProbe").Order("probes.id desc")
+		Preload("ProbeStatus").Preload("EmergencyProbe").Order("probes.id desc")
 
 	if query != nil && args != nil {
 		countQuery = countQuery.Where(query, args)

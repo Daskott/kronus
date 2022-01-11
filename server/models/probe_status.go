@@ -26,8 +26,8 @@ type ProbeStats struct {
 
 type ProbeStatus struct {
 	BaseModel
-	Name   string
-	Probes []Probe `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Name   string  `json:"name"`
+	Probes []Probe `json:"probes,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
 
 func FindProbeStatus(name string) (*ProbeStatus, error) {
