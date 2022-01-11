@@ -11,13 +11,14 @@ var ErrDuplicateJob = errors.New("job with the given name already exists in queu
 
 type Job struct {
 	BaseModel
-	Fails       int    `json:"fails"`
-	Name        string `json:"name"`
-	Handler     string `json:"handler"`
-	Args        string `json:"args"`
-	LastError   string `json:"last_error"`
-	Claimed     bool   `json:"claimed" gorm:"default:false"`
-	JobStatusID uint   `json:"job_status_id"`
+	Fails       int        `json:"fails"`
+	Name        string     `json:"name"`
+	Handler     string     `json:"handler"`
+	Args        string     `json:"args"`
+	LastError   string     `json:"last_error"`
+	Claimed     bool       `json:"claimed" gorm:"default:false"`
+	JobStatusID uint       `json:"job_status_id"`
+	JobStatus   *JobStatus `json:"status"`
 }
 
 func (job *Job) MarkAsClaimed() (bool, error) {
@@ -65,7 +66,7 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 
 	var enqueuedJobStatus JobStatus
 	for _, jobStatus := range queuedJobStatuses {
-		if jobStatus.Name == "enqueued" {
+		if jobStatus.Name == ENQUEUED_JOB {
 			enqueuedJobStatus = jobStatus
 			break
 		}
@@ -102,8 +103,9 @@ func FetchJobsByStatus(status string, page int) ([]Job, *Paging, error) {
 		return nil, nil, err
 	}
 
-	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).Order("jobs.id desc").Joins(JOIN_QUERY, status).
-		Find(&jobs).Error
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Preload("JobStatus").Order("jobs.id desc").
+		Joins(JOIN_QUERY, status).Find(&jobs).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil, err
 	}
@@ -120,7 +122,8 @@ func FetchJobs(page int) ([]Job, *Paging, error) {
 		return nil, nil, err
 	}
 
-	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).Order("jobs.id desc").Find(&jobs).Error
+	err = db.Scopes(paginate(page, MAX_PAGE_SIZE)).
+		Preload("JobStatus").Order("jobs.id desc").Find(&jobs).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil, err
 	}
