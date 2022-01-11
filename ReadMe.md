@@ -102,7 +102,7 @@ kronus server --config=config.yml
 - [Create a user](#create-user) account
 - [Get access token](#get-access-token) for protected routes
 - [Add a contact](#create-contact) and set as user's emergency contact
-- Finally [turn on the emergency probe](#update-probe-settings)
+- Finally [turn on liveliness probe](#update-probe-settings)
 
 ## API and Usage
 
