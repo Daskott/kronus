@@ -9,7 +9,7 @@ Its key features are:
 - **Contact Emergency Contact:** When the service doesn't get a response back
   from a user or gets a `bad` response, the user's emergency contact is alerted.
 
-- **Robust API:** Allow developers to add extra functionality based on a user's
+- **Flexible API:** Allow developers to add extra functionality based on a user's
   "aliveness". A user's `probes` can be queried periodically from kronus server
   to see the `status` of the last probe. And based on that, do whatever the
   developer wants.
@@ -249,6 +249,54 @@ kronus server --config=config.yml
   }
   ```
 
+#### Retrieve user probes
+- Get probes for a user, with the probe's status
+
+  | Method | Path |
+  | --- | --- |
+  | `GET` | **/users/{uid}/probes/** |
+
+  <br/>**Sample Request:**
+  ```curl
+  curl --request GET 'localhost:3900/v1/users/1/probes' \
+  --header 'Authorization: Bearer <token>'
+  ```
+  <br/>**Sample Response:**
+  ```json
+  {
+      "success": true,
+      "data": [
+          {
+              "id": 1,
+              "created_at": "2022-01-12T14:43:02.79022-07:00",
+              "updated_at": "2022-01-12T19:15:49.854305-07:00",
+              "last_response": "",
+              "retry_count": 3,
+              "emergency_probe": {
+                  "id": 1,
+                  "created_at": "2022-01-12T19:15:49.854767-07:00",
+                  "updated_at": "2022-01-12T19:15:49.854767-07:00",
+                  "contact_id": 1,
+                  "probe_id": 1
+              },
+              "user_id": 1,
+              "probe_status_id": 4,
+              "status": {
+                  "id": 4,
+                  "created_at": "2021-01-10T16:57:18.809242-07:00",
+                  "updated_at": "2021-01-10T16:57:18.809242-07:00",
+                  "name": "unavailable"
+              }
+          }
+      ],
+      "paging": {
+          "total": 1,
+          "page": 1,
+          "pages": 1
+      }
+  }
+  ```
+
 #### Other routes
 
 | Method | Route | Note |
@@ -270,7 +318,7 @@ kronus server --config=config.yml
 | `GET` | **/v1/probes?status=** | Fetch probes with optional filter - *status* which could be  `pending`, `good`, `bad` `cancelled`, or `unavailable`. Also supports pagination - ***[admin-only]***|
 
 ### Development
-- Checkout repo: 
+- Checkout repo:
   ```
   git clone https://github.com/Daskott/kronus.git
   ```
@@ -278,7 +326,7 @@ kronus server --config=config.yml
   ```
   go run main.go
   ```
-- To run `server`: 
+- To run `serverCmd`: 
   ```
   go run main.go server --dev
   ```
@@ -292,12 +340,12 @@ kronus server --config=config.yml
 
 - Commit changes:
   ```
-  git commit -m "kronus: changes for v0.3.2"
+  git commit -m "kronus: changes for v0.3.3"
   ```
 
 - Run:
   ```
-  make release VERSION=0.3.2
+  make release VERSION=0.3.3
   ```
 For more info see detailed steps https://golang.org/doc/modules/publishing
 
