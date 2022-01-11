@@ -1,4 +1,4 @@
-## Kronus
+# Kronus
 Kronus is a tool for asessing users "aliveness" via liveliness probes and
 actioning on it based on the results of the probe.
 
@@ -33,18 +33,18 @@ Flags:
 Use "kronus [command] --help" for more information about a command.
   ```
 
-### Dependencies
+## Dependencies
 - Install [Go](https://golang.org/dl/)
 - [Twilio](https://www.twilio.com/) sms webhook(use POST `/webhook/sms` endpoint) and credentials for
   sending probe messages.
 - [Google application credentials](https://cloud.google.com/iam/docs/creating-managing-service-accounts#iam-service-accounts-create-console) for [cloud storage](https://cloud.google.com/storage) - (Optional - for sqlite file backup).
 
-### Install
+## Install
 ```
 go get -u github.com/Daskott/kronus
 ```
 
-### Server Config
+## Server Config
 The server requires a valid `config.yml` configuration file as shown below:
 ```yml
 kronus:
@@ -88,25 +88,25 @@ twilio:
   messagingServiceSid: CHKX00SXXXXXXXXXXXXXXXXXXX
 ```
 
-### Start server in dev mode
+## Start server in dev mode
 ```
 kronus server --dev
 ```
 
-### Start server with config
+## Start server with config
 ```
 kronus server --config=config.yml
 ```
 
-### Setup steps
+## Setup steps
 - [Create a user](#create-user) account
 - [Get access token](#get-access-token) for protected routes
 - [Add a contact](#create-contact) and set as user's emergency contact
 - Finally [turn on the emergency probe](#update-probe-settings)
 
-### API and Usage
+## API and Usage
 
-#### Create user
+### Create user
 - The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
   <br/>A default `probe_settings` is created for the user account, and `active`
   is set to `false`.
@@ -153,7 +153,7 @@ kronus server --config=config.yml
   }
   ```
 
-#### Get access token
+### Get access token
 - Get access `token` which will be used to query protected resources 
   
   | Method | Path |
@@ -179,7 +179,7 @@ kronus server --config=config.yml
     }
   ```
 
-#### Create contact
+### Create contact
 -  For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
   
     | Method | Path |
@@ -217,7 +217,7 @@ kronus server --config=config.yml
     }
     ```   
 
-#### Update probe settings
+### Update probe settings
 - Set how often you'd like to get a probe message with a `cron_expression` and use `active` to
   enable/disable probe.
 
@@ -249,7 +249,7 @@ kronus server --config=config.yml
   }
   ```
 
-#### Retrieve user probes
+### Retrieve user probes
 - Get probes for a user, with the probe's status
 
   | Method | Path |
@@ -297,7 +297,7 @@ kronus server --config=config.yml
   }
   ```
 
-#### Other routes
+### Other routes
 
 | Method | Route | Note |
 | --- | --- | --- |
@@ -316,7 +316,7 @@ kronus server --config=config.yml
 | `GET` | **/v1/probes/stats** | Get probe stats i.e. no of probes in each group e.g. `pending`, `good`, `bad` `cancelled`, or `unavailable` - ***[admin-only]***|
 | `GET` | **/v1/probes?status=** | Fetch probes with optional filter - *status* which could be  `pending`, `good`, `bad` `cancelled`, or `unavailable`. Also supports pagination - ***[admin-only]***|
 
-### Development
+## Development
 - Checkout repo:
   ```
   git clone https://github.com/Daskott/kronus.git
@@ -334,7 +334,7 @@ kronus server --config=config.yml
   make test
   ```
 
-### Publishing package
+## Publishing package
 - Update `Version` in `version.go`
 
 - Commit changes:
