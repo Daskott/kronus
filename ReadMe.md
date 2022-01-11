@@ -339,12 +339,12 @@ kronus server --config=config.yml
 
 - Commit changes:
   ```
-  git commit -m "kronus: changes for v0.3.3"
+  git commit -m "kronus: changes for v0.x.x"
   ```
 
 - Run:
   ```
-  make release VERSION=0.3.3
+  make release VERSION=0.x.x
   ```
 For more info see detailed steps https://golang.org/doc/modules/publishing
 
