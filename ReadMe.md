@@ -184,7 +184,7 @@ kronus server --config=config.yml
   
     | Method | Path |
     | --- | --- |
-    | `POST` | **/users/{uid}/contacts/** |
+    | `POST` | **/users/{uid}/contacts** |
 
     <br/>**Sample Request:**
     ```curl
@@ -223,7 +223,7 @@ kronus server --config=config.yml
 
   | Method | Path |
   | --- | --- |
-  | `PUT` | **/users/{uid}/probe_settings/** |
+  | `PUT` | **/users/{uid}/probe_settings** |
 
   <br/>**Sample Request:**
   ```curl
@@ -254,7 +254,7 @@ kronus server --config=config.yml
 
   | Method | Path |
   | --- | --- |
-  | `GET` | **/users/{uid}/probes/** |
+  | `GET` | **/users/{uid}/probes** |
 
   <br/>**Sample Request:**
   ```curl
