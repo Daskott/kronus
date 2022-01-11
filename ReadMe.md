@@ -107,45 +107,145 @@ kronus server --config=config.yml
 ### API and Usage
 
 #### Create user
-- `POST` **/v1/users** <br/>The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
-  <br/>A default `probe_settings` is created for the user account, and `active` is set to `false`.
-  ```json
-  {
+- The first user created is assigned the `admin` role and every other user has to be created by the `admin`.
+  <br/>A default `probe_settings` is created for the user account, and `active`
+  is set to `false`.
+  
+  | Method | Path |
+  | --- | --- |
+  | `POST` | **/webhook/sms** |
+    
+  <br/>**Sample Request:**
+  ```curl
+  curl --request POST 'localhost:3900/v1/users' \
+  --header 'Authorization: Bearer <token>' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
       "first_name": "tony",
       "last_name": "stark",
       "email": "stark@avengers.com",
       "password": "very-secure",
       "phone_number": "+12345678900"
+  }'
+  ```
+  <br/>**Sample Response:**
+  ```json
+    {
+      "success": true,
+      "data": {
+          "id": 1,
+          "created_at": "2022-01-10T19:54:53.708959-07:00",
+          "updated_at": "2022-01-10T19:54:53.708959-07:00",
+          "first_name": "tony",
+          "last_name": "stark",
+          "phone_number": "+12345678900",
+          "email": "stark@avengers.com",
+          "role_id": 1,
+          "probe_settings": {
+              "id": 1,
+              "created_at": "2022-01-10T19:54:53.709185-07:00",
+              "updated_at": "2022-01-10T19:54:53.709185-07:00",
+              "user_id": 1,
+              "active": false,
+              "cron_expression": "0 18 * * 3"
+          }
+      }
   }
   ```
 
 #### Get access token
-- `POST` **/login** <br/> Get access `token` which will be used to query protected resources 
-  ```json
-  {
+- Get access `token` which will be used to query protected resources 
+  
+  | Method | Path |
+  | --- | --- |
+  | `POST` | **/login** |
+
+  <br/>**Sample Request:**
+  ```curl
+  curl --request POST 'localhost:3900/login' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
       "email": "stark@avengers.com",
       "password": "very-secure"
-  }
+  }'
+  ```
+  <br/>**Sample Response:**
+  ```json
+    {
+      "success": true,
+      "data": {
+          "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...."
+      }
+    }
   ```
 
 #### Create contact
-- `POST` **/v1/users/{uid}/contacts/** <br/> For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
-  ```json
-  {
-      "first_name": "strongest",
-      "last_name": "avenger",
-      "phone_number": "+12345678900",
-      "email": "hulk@avengers.com",
-      "is_emergency_contact": true
-  }
-  ```
+-  For protected routes, the `token` from the **/login** needs to be added to the `Authorization` header as `Bearer <token>`
+  
+    | Method | Path |
+    | --- | --- |
+    | `POST` | **/users/{uid}/contacts/** |
+
+    <br/>**Sample Request:**
+    ```curl
+    curl --location --request POST 'localhost:3900/v1/users/1/contacts' \
+    --header 'Authorization: Bearer <token>' \
+    --header 'Content-Type: application/json' \
+    --data-raw '{
+        "first_name": "strongest",
+        "last_name": "avenger",
+        "phone_number": "+12345678900",
+        "email": "hulk@avengers.com",
+        "is_emergency_contact": true
+    }'
+    ```
+    <br/>**Sample Response:**
+    ```json
+    {
+      "success": true,
+      "data": {
+          "id": 1,
+          "created_at": "2022-01-10T20:25:40.878785-07:00",
+          "updated_at": "2022-01-10T20:25:40.878785-07:00",
+          "first_name": "strongest",
+          "last_name": "avenger",
+          "phone_number": "+12345678900",
+          "email": "hulk@avengers.com",
+          "user_id": 1,
+          "is_emergency_contact": true
+      }
+    }
+    ```   
 
 #### Update probe settings
-- `PUT` **/v1/users/{uid}/probe_settings/** <br/> Set how often you'd like to get a probe message with a `cron_expression` and use `active` to enable/disable probe.
-  ```json
-  {
+- Set how often you'd like to get a probe message with a `cron_expression` and use `active` to
+  enable/disable probe.
+
+  | Method | Path |
+  | --- | --- |
+  | `PUT` | **/users/{uid}/probe_settings/** |
+
+  <br/>**Sample Request:**
+  ```curl
+  curl --request PUT 'localhost:3900/v1/users/1/probe_settings' \
+  --header 'Authorization: Bearer <token>' \
+  --data-raw '{
       "cron_expression": "0 18 * * */1",
       "active": true
+  }'
+  ```
+  <br/>**Sample Response:**
+  ```json
+    {
+      "success": true,
+      "data": {
+          "id": 1,
+          "created_at": "2022-01-10T19:54:53.709185-07:00",
+          "updated_at": "2022-01-10T20:33:16.828639-07:00",
+          "user_id": 1,
+          "active": true,
+          "cron_expression": "0 18 * * */1"
+      }
   }
   ```
 
