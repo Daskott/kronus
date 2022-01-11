@@ -1,15 +1,18 @@
 ## Kronus
-Kronus is a tool for sending and asessing user liveness probes.
+Kronus is a tool for asessing users "aliveness" via liveliness probes and
+actioning on it based on the results of the probe.
 
 Its key features are:
 - **Sending Liveliness Probes:** The kronus server sends out probes to users on the
-  server and based on their response determines their "aliveness".
+  server and based on their response, determines their "aliveness".
+
 - **Contact Emergency Contact:** When the service doesn't get a response back
   from a user or gets a `bad` response, the user's emergency contact is alerted.
+
 - **Robust API:** Allow developers to add extra functionality based on a user's
   "aliveness". A user's `probes` can be queried periodically from kronus server
   to see the `status` of the last probe. And based on that, do whatever the
-  developer wants
+  developer wants.
 
 ```
 Usage:
@@ -185,12 +188,14 @@ kronus server --config=config.yml
   ```
 
 ### Publishing package
-* Update `Version` in `version.go`
-* Commit changes:
+- Update `Version` in `version.go`
+
+- Commit changes:
   ```
   git commit -m "kronus: changes for v0.3.2"
   ```
-* Run:
+
+- Run:
   ```
   make release VERSION=0.3.2
   ```
@@ -221,4 +226,4 @@ For more info see detailed steps https://golang.org/doc/modules/publishing
     - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
 
 - Q: Why ?
-    - A: Why not ? It was/is a fun project to learn more `Go` and design/architecture patterns
+    - A: Why not ? Its a fun project to level up on `Go`, and design/architecture patterns.

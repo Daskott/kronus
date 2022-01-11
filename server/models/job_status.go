@@ -25,8 +25,8 @@ type JobsStats struct {
 
 type JobStatus struct {
 	BaseModel
-	Name string
-	Jobs []Job `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Name string `json:"name"`
+	Jobs []Job  `json:"-" gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
 
 func FindJobStatus(name string) (*JobStatus, error) {
