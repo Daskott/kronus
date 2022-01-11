@@ -308,7 +308,6 @@ kronus server --config=config.yml
 | `PUT` |**/v1/users/{uid}**| Can only UPDATE own record |
 | `DELETE` |**/v1/users/{uid}**| Can only DELETE your own record, except if you're admin |
 | `GET` |**/v1/users/{uid}/contacts**| Fetch all contacts for a given user where `uid` is the user id. Supports optional `page` filter for pagination|
-| `GET` |**/v1/users/{uid}/probes**| Fetch all probes for a given user where `uid` is the user id. Supports optional `page` filter for pagination |
 | `PUT` |**/v1/users/{uid}/contacts/{id}**| Update contact for a user |
 | `DELETE` |**/v1/users/{uid}/contacts/{id}**| Delete user contact |
 | `GET` | **/v1/users** | Fetch all users. Supports optional `page` filter for pagination ***[admin-only]*** |
