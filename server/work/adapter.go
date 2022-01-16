@@ -15,14 +15,16 @@ const MAX_CONCURRENCY = 1
 var ErrJobNotFoundInCronSch = errors.New("handler with provided name already mapped")
 
 type WorkerPoolAdapter struct {
-	cronScheduler *gocron.Scheduler
-	pool          workerPool
+	cronScheduler            *gocron.Scheduler
+	pool                     workerPool
+	useCronParserWithSeconds bool
 }
 
-func NewWorkerAdapter(timeZoneArg string) *WorkerPoolAdapter {
+func NewWorkerAdapter(timeZoneArg string, useCronParserWithSeconds bool) *WorkerPoolAdapter {
 	return &WorkerPoolAdapter{
-		cronScheduler: cron.NewCronScheduler(timeZoneArg),
-		pool:          *newWorkerPool(MAX_CONCURRENCY),
+		cronScheduler:            cron.NewCronScheduler(timeZoneArg),
+		pool:                     *newWorkerPool(MAX_CONCURRENCY),
+		useCronParserWithSeconds: useCronParserWithSeconds,
 	}
 }
 
@@ -73,7 +75,16 @@ func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 //if a duplicate is added, an error is logged when the internal cron scheduler tries to add it
 // the job to the job queue.
 func (adapter *WorkerPoolAdapter) PeriodicallyPerform(cronExpression string, job JobParams) error {
-	_, err := adapter.cronScheduler.Cron(cronExpression).Tag(job.Name).
+	var scheduler *gocron.Scheduler
+
+	// The scheduler will use a cron parser that expects a 6th field for seconds
+	if adapter.useCronParserWithSeconds {
+		scheduler = adapter.cronScheduler.CronWithSeconds(cronExpression)
+	} else {
+		scheduler = adapter.cronScheduler.Cron(cronExpression)
+	}
+
+	_, err := scheduler.Tag(job.Name).
 		Do(
 			func(job JobParams) {
 				err := adapter.Perform(job)

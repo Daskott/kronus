@@ -65,13 +65,13 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.Kronus.PrivateKeyPem)
 	fatalOnError(err)
 
-	workerPool = work.NewWorkerAdapter(config.Kronus.Cron.TimeZone)
+	workerPool = work.NewWorkerAdapter(config.Kronus.Cron.TimeZone, false)
 	registerJobHandlers(workerPool)
 	enqueueJobs(workerPool)
 
 	twilioClient = twilio.NewClient(config.Twilio, config.Kronus.PublicUrl, devMode)
 
-	probeScheduler, err = pbscheduler.NewProbeScheduler(workerPool, twilioClient)
+	probeScheduler, err = pbscheduler.NewProbeScheduler(workerPool, twilioClient, "*/1 * * * *")
 	fatalOnError(err)
 	probeScheduler.ScheduleProbes()
 

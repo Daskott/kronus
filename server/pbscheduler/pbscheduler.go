@@ -24,15 +24,21 @@ const (
 var logg = logger.NewLogger()
 
 type ProbeScheduler struct {
-	workerPoolAdapter *work.WorkerPoolAdapter
-	messageClient     *twilio.ClientWrapper
+	workerPoolAdapter        *work.WorkerPoolAdapter
+	messageClient            *twilio.ClientWrapper
+	followProbesCronSchedule string
 }
 
 // NewProbeScheduler creates new probe scheduler
-func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter, msgClient *twilio.ClientWrapper) (*ProbeScheduler, error) {
+func NewProbeScheduler(
+	workerPoolAdapter *work.WorkerPoolAdapter,
+	msgClient *twilio.ClientWrapper,
+	followProbesCronSchedule string,
+) (*ProbeScheduler, error) {
 	probeScheduler := ProbeScheduler{
-		workerPoolAdapter: workerPoolAdapter,
-		messageClient:     msgClient,
+		followProbesCronSchedule: followProbesCronSchedule,
+		workerPoolAdapter:        workerPoolAdapter,
+		messageClient:            msgClient,
 	}
 
 	err := probeScheduler.registerWorkerHandlers()
@@ -45,12 +51,12 @@ func NewProbeScheduler(workerPoolAdapter *work.WorkerPoolAdapter, msgClient *twi
 
 // PeriodicallyPerfomProbe creates 'liveliness probe' cron jobs for user.
 // And when each cron is triggered, the job is sent to a job to be executed.
-func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
+func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) error {
 	// Try updating the user's probe job schedule if one is already running
 	// Else add a new one to the the scheduler
 	err := pbs.workerPoolAdapter.UpdateJobScheduleByTag(probeName(user.ID), user.ProbeSettings.CronExpression)
 	if err == work.ErrJobNotFoundInCronSch {
-		pbs.workerPoolAdapter.PeriodicallyPerform(user.ProbeSettings.CronExpression, work.JobParams{
+		err = pbs.workerPoolAdapter.PeriodicallyPerform(user.ProbeSettings.CronExpression, work.JobParams{
 			Name:    probeName(user.ID),
 			Handler: SEND_LIVELINESS_PROBE_HANDLER,
 			Args: map[string]interface{}{
@@ -60,6 +66,8 @@ func (pbs ProbeScheduler) PeriodicallyPerfomProbe(user models.User) {
 			},
 		})
 	}
+
+	return err
 }
 
 // DisablePeriodicProbe removes probe from scheduler & disables probe in user settings
@@ -76,7 +84,10 @@ func (pScheduler ProbeScheduler) ScheduleProbes() {
 		logg.Panic(err)
 	}
 
-	pScheduler.initPeriodicFollowupProbesEnqeuer()
+	err = pScheduler.initPeriodicFollowupProbesEnqeuer()
+	if err != nil {
+		logg.Panic(err)
+	}
 }
 
 // EmergencyProbeName returns the string used as tag for an emergency probe job name
@@ -93,7 +104,10 @@ func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 	}
 
 	for _, user := range users {
-		pScheduler.PeriodicallyPerfomProbe(user)
+		err = pScheduler.PeriodicallyPerfomProbe(user)
+		if err != nil {
+			logg.Error(err)
+		}
 	}
 	logg.Infof("%v liveliness probe(s) cron scheduled", len(users))
 
@@ -101,9 +115,9 @@ func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 }
 
 // Creates 'followup probe' cron jobs for users with 'pending' liveliness probes.
-// And when each cron is triggered i.e every 5mins, followup jobs are sent to a queue to be executed.
-func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() {
-	pbs.workerPoolAdapter.PeriodicallyPerform("*/5 * * * *", work.JobParams{
+// And when each cron is triggered, followup jobs are sent to a queue to be executed.
+func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() error {
+	return pbs.workerPoolAdapter.PeriodicallyPerform(pbs.followProbesCronSchedule, work.JobParams{
 		Name:    ENQUEUE_FOLLOWUP_PROBES_HANDLER,
 		Handler: ENQUEUE_FOLLOWUP_PROBES_HANDLER,
 		Args:    map[string]interface{}{},

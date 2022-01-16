@@ -55,6 +55,28 @@ func InitialiazeDb(passPhrase string, dbRootDir string, storage *gstorage.GStora
 	return nil
 }
 
+func InitializeTestDb() error {
+	var err error
+
+	db, err = gorm.Open(sqliteEncrypt.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+
+	err = db.AutoMigrate(
+		&ProbeStatus{}, &JobStatus{}, &Job{},
+		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
+		&User{}, &EmergencyProbe{},
+	)
+	if err != nil {
+		return err
+	}
+
+	populateDBWithSeedData()
+
+	return nil
+}
+
 func DbDirectory(dbRootDir string) (string, error) {
 	dbDir := filepath.Join(dbRootDir, "db")
 
