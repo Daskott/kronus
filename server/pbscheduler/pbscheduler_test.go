@@ -1,7 +1,6 @@
 package pbscheduler
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -74,7 +73,6 @@ func TestScheduleProbes(t *testing.T) {
 
 	// Check that each user has 1 probe created in the database
 	for _, user := range []*models.User{testUser, testUser2} {
-		fmt.Println("Here")
 		if probes, _, err := models.FetchProbes(1, "user_id = ?", user.ID); err != nil ||
 			len(probes) != 1 {
 			t.Errorf("Expected user: %v to have probe, found none: %v", user.FirstName, err)
