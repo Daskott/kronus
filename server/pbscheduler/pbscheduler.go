@@ -146,7 +146,7 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 		// Follow up 3 will be @ ~8:00pm
 		//
 		// And if no respons, @ ~9:00pm send out emergency probe
-		if time.Since(*probe.UpdatedAt) < 1*time.Hour {
+		if time.Since(probe.UpdatedAt) < 1*time.Hour {
 			continue
 		}
 
