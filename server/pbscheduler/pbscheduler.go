@@ -106,7 +106,7 @@ func (pScheduler ProbeScheduler) initUsersPeriodicProbes() error {
 	for _, user := range users {
 		err = pScheduler.PeriodicallyPerfomProbe(user)
 		if err != nil {
-			logg.Error(err)
+			return err
 		}
 	}
 	logg.Infof("%v liveliness probe(s) cron scheduled", len(users))
