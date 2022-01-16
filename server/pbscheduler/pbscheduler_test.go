@@ -64,18 +64,19 @@ func TestScheduleProbes(t *testing.T) {
 		t.Errorf("Failed to fetch jobs: %v", err)
 	}
 
-	// Check # of jobs created match what is expected
-	// i.e number of users with active probes + task to schedule follow up probes
+	// Check # of jobs created >= what is expected (because of the everySecond
+	// interval, more jobs could be created)
+	// i.e atleast number of users with active probes + task to schedule follow up probes
 	expectedNoOfJobs := 3
 	if len(jobs) < expectedNoOfJobs {
 		t.Errorf("Expected >= %v jobs to be queued, got %v", expectedNoOfJobs, len(jobs))
 	}
 
-	// Check that each user has a probe created in the database
+	// Check that each user has 1 probe created in the database
 	for _, user := range []*models.User{testUser, testUser2} {
 		fmt.Println("Here")
 		if probes, _, err := models.FetchProbes(1, "user_id = ?", user.ID); err != nil ||
-			len(probes) < 1 {
+			len(probes) != 1 {
 			t.Errorf("Expected user: %v to have probe, found none: %v", user.FirstName, err)
 		}
 	}
