@@ -81,10 +81,10 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 	}, Job{Name: name, JobStatusID: enqueuedJobStatus.ID}).Error
 }
 
-func LastJob(status string, claimed bool) (*Job, error) {
+func FirstJob(status string, claimed bool) (*Job, error) {
 	job := Job{}
 	err := db.Joins("INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id AND job_statuses.name = ? AND claimed = ? ",
-		status, claimed).Last(&job).Error
+		status, claimed).First(&job).Error
 	if err != nil {
 		return nil, err
 	}
