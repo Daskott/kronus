@@ -26,7 +26,6 @@ Available Commands:
 Flags:
       --dev       run in development mode
   -h, --help      help for kronus
-      --test      run in test mode
   -t, --toggle    Help message for toggle
   -v, --version   version for kronus
 

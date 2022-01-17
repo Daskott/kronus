@@ -24,6 +24,10 @@ var ProbeStatusMapToResponse = map[string]map[string]bool{
 	BAD_PROBE:  {"no": true, "nope": true, "nah": true, "na": true, "n": true},
 }
 
+func (probe *Probe) Update(data map[string]interface{}) error {
+	return db.Model(probe).Updates(data).Error
+}
+
 func (probe *Probe) Save() error {
 	return db.Save(&probe).Error
 }

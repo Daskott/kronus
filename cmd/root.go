@@ -23,8 +23,7 @@ import (
 )
 
 var (
-	isDevEnv  bool
-	isTestEnv bool
+	isDevEnv bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -50,7 +49,6 @@ for users on its server.`,
 	}
 
 	cmd.PersistentFlags().BoolVarP(&isDevEnv, "dev", "", false, "run in development mode")
-	cmd.PersistentFlags().BoolVarP(&isTestEnv, "test", "", false, "run in test mode")
 
 	cmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 

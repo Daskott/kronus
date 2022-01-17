@@ -83,7 +83,7 @@ func (w *worker) loop() {
 			logg.Infof("Stopping worker %s", w.id)
 			return
 		case <-rateLimiter.C:
-			currentJob, err = models.LastJob(models.ENQUEUED_JOB, false)
+			currentJob, err = models.FirstJob(models.ENQUEUED_JOB, false)
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					// If no job found, slowly increase the wait time between each job fetch

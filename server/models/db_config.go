@@ -41,18 +41,18 @@ func InitialiazeDb(passPhrase string, dbRootDir string, storage *gstorage.GStora
 		return err
 	}
 
-	err = db.AutoMigrate(
-		&ProbeStatus{}, &JobStatus{}, &Job{},
-		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
-		&User{}, &EmergencyProbe{},
-	)
+	return autoMigrateAndSeedDb()
+}
+
+func InitializeTestDb() error {
+	var err error
+
+	db, err = gorm.Open(sqliteEncrypt.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		return err
 	}
 
-	populateDBWithSeedData()
-
-	return nil
+	return autoMigrateAndSeedDb()
 }
 
 func DbDirectory(dbRootDir string) (string, error) {
@@ -91,6 +91,21 @@ func openDB(passPhrase string, dbRootDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %v", err)
 	}
+
+	return nil
+}
+
+func autoMigrateAndSeedDb() error {
+	err := db.AutoMigrate(
+		&ProbeStatus{}, &JobStatus{}, &Job{},
+		&Role{}, &Probe{}, &Contact{}, &ProbeSetting{},
+		&User{}, &EmergencyProbe{},
+	)
+	if err != nil {
+		return err
+	}
+
+	populateDBWithSeedData()
 
 	return nil
 }
