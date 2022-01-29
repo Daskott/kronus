@@ -3,6 +3,7 @@ package pbscheduler
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 )
 
 const (
-	MAX_PROBE_RETRIES               = 3
 	SEND_LIVELINESS_PROBE_HANDLER   = "send_liveliness_probe"
 	SEND_FOLLOWUP_PROBE_HANDLER     = "send_followup_probe"
 	SEND_EMERGENCY_PROBE_HANDLER    = "send_emergency_probe"
@@ -137,21 +137,22 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 		jobArgs["user_id"] = probe.UserID
 		jobArgs["probe_id"] = probe.ID
 
-		// Only send out followup probe after at least 1 hour after the last probe was sent,
-		// until max-retries. So the user has enough time to respond.
+		// Only send out followup probe after only after 'WaitTimeInMinutes' has
+		// elapsed. Keep doing so until 'MaxRetries'.
 		//
-		// E.g sendInitialProbe @ 5:OOpm
+		// E.g if MaxRetries == 3 && WaitTimeInMinutes = 60:
+		// sendInitialProbe @ 5:OOpm
 		// Follow up 1 will be @ ~6:00pm
 		// Follow up 2 will be @ ~7:00pm
 		// Follow up 3 will be @ ~8:00pm
 		//
 		// And if no respons, @ ~9:00pm send out emergency probe
-		if time.Since(probe.UpdatedAt) < 1*time.Hour {
+		if time.Since(probe.UpdatedAt) < time.Duration(probe.WaitTimeInMinutes)*time.Minute {
 			continue
 		}
 
 		// if max retries is exceeded, send emergency probe
-		if probe.RetryCount >= MAX_PROBE_RETRIES {
+		if probe.RetryCount >= probe.MaxRetries {
 			jobArgs["probe_status"] = models.UNAVAILABLE_PROBE
 
 			err = pScheduler.workerPoolAdapter.Perform(work.JobParams{
@@ -233,8 +234,20 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
+	// By default use the user's probe_settings
+	waitTimeInMinutes := user.ProbeSettings.WaitTimeInMinutes
+	maxRetries := user.ProbeSettings.MaxRetries
+
+	if val, err := strconv.Atoi(fmt.Sprint(params["wait_time_in_minutes"])); err != nil {
+		waitTimeInMinutes = val
+	}
+
+	if val, err := strconv.Atoi(fmt.Sprint(params["max_retries"])); err != nil {
+		maxRetries = val
+	}
+
 	// Create record of initial probe msg sent to usser in db
-	err = models.CreateProbe(params["user_id"])
+	err = models.CreateProbe(user.ID, waitTimeInMinutes, maxRetries)
 	if err != nil {
 		logg.Error(err)
 		return err

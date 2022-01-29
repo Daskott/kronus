@@ -159,7 +159,7 @@ func TestScheduleProbes(t *testing.T) {
 			// no reply from user with > 1 followup [setup for next test]
 			if tcase.expectedProbeRetries > 0 {
 				probe.Update(map[string]interface{}{
-					"retry_count": MAX_PROBE_RETRIES,
+					"retry_count": probe.MaxRetries,
 					"updated_at":  probe.UpdatedAt.Add(-time.Hour)})
 			}
 		})

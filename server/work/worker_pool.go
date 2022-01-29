@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Daskott/kronus/server/models"
 	"github.com/pkg/errors"
@@ -13,16 +14,20 @@ import (
 type workerPool struct {
 	handlers    map[string]Handler
 	workers     []*worker
-	requeuer    *requeuer
+	retrier     *requeuer
+	scheduler   *requeuer
 	concurrency int
 	started     bool
 }
 
 func newWorkerPool(concurrency int) *workerPool {
+	retrier, _ := newRequeuer(models.IN_PROGRESS_JOB)
+	scheduler, _ := newRequeuer(models.SCHEDULED_JOB)
 	wp := workerPool{
 		handlers:    make(map[string]Handler),
 		concurrency: concurrency,
-		requeuer:    newRequeuer(),
+		retrier:     retrier,
+		scheduler:   scheduler,
 	}
 
 	for i := 0; i < concurrency; i++ {
@@ -63,13 +68,24 @@ func (wp *workerPool) enqueue(job JobParams) error {
 	}
 
 	// This ensures that all jobs currently in the queue or in-progress are unique
-	err = models.CreateUniqueJobByName(job.Name, job.Handler, string(argsAsJson))
+	return models.CreateUniqueJobByName(job.Name, job.Handler, string(argsAsJson))
+}
 
+func (wp *workerPool) enqueueIn(secondsInFuture int, job JobParams) error {
+	if strings.TrimSpace(job.Name) == "" || strings.TrimSpace(job.Handler) == "" {
+		return fmt.Errorf("both a name & handler is required for a job")
+	}
+
+	argsAsJson, err := json.Marshal(job.Args)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return models.CreateScheduledJob(
+		job.Name, job.Handler,
+		string(argsAsJson),
+		time.Now().Add(time.Duration(secondsInFuture)*time.Second),
+	)
 }
 
 // start starts all workers in pool & job reaper i.e the workers can start processing jobs
@@ -83,7 +99,8 @@ func (wp *workerPool) start() {
 		go worker.start()
 	}
 
-	wp.requeuer.start()
+	wp.retrier.start()
+	wp.scheduler.start()
 }
 
 // stop stops all workers in pool & job reaper i.e jobs will stop being processed
@@ -103,5 +120,6 @@ func (wp *workerPool) stop() {
 	wg.Wait()
 	wp.started = false
 
-	wp.requeuer.stop()
+	wp.retrier.stop()
+	wp.scheduler.stop()
 }

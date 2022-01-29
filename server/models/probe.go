@@ -17,6 +17,10 @@ type Probe struct {
 	UserID         uint            `json:"user_id" gorm:"not null"`
 	ProbeStatusID  uint            `json:"probe_status_id"`
 	ProbeStatus    *ProbeStatus    `json:"status"`
+
+	// TODO: Remove defaults later & set fields to "not null"
+	MaxRetries        int `json:"max_retries" gorm:"default:3"`
+	WaitTimeInMinutes int `json:"wait_time_in_minutes" gorm:"default:60"`
 }
 
 var ProbeStatusMapToResponse = map[string]map[string]bool{
@@ -136,7 +140,7 @@ func FindProbe(id interface{}) (*Probe, error) {
 	return &probe, nil
 }
 
-func CreateProbe(userID interface{}) error {
+func CreateProbe(userID interface{}, waitTimeInMinutes, maxRetries int) error {
 	currentTime := time.Now()
 	pendingProbeStatus := ProbeStatus{}
 	err := db.Where(&ProbeStatus{Name: "pending"}).Find(&pendingProbeStatus).Error
@@ -145,10 +149,12 @@ func CreateProbe(userID interface{}) error {
 	}
 
 	return db.Model(&Probe{}).Create(map[string]interface{}{
-		"user_id":         userID,
-		"probe_status_id": pendingProbeStatus.ID,
-		"created_at":      currentTime,
-		"updated_at":      currentTime,
+		"user_id":              userID,
+		"probe_status_id":      pendingProbeStatus.ID,
+		"wait_time_in_minutes": waitTimeInMinutes,
+		"max_retries":          maxRetries,
+		"created_at":           currentTime,
+		"updated_at":           currentTime,
 	}).Error
 }
 

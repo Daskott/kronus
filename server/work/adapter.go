@@ -68,6 +68,19 @@ func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 	return nil
 }
 
+// PerformIn sends a job to the 'scheduled' queue
+// to be executed as soon as 'secondsInFuture' has elapsed
+func (adapter *WorkerPoolAdapter) PerformIn(secondsInFuture int, job JobParams) error {
+	logg.Infof("Scheduling job: %v, to run in %v seconds", job, secondsInFuture)
+
+	err := adapter.pool.enqueueIn(secondsInFuture, job)
+	if err != nil {
+		return fmt.Errorf("error scheduling job: %v, %v", job, err)
+	}
+
+	return nil
+}
+
 // PeriodicallyPerform adds a job to the queue periodically (to be executed),
 // based on the 'cronExpression' expression provided.
 //

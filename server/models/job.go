@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -19,6 +20,7 @@ type Job struct {
 	Claimed     bool       `json:"claimed" gorm:"default:false"`
 	JobStatusID uint       `json:"job_status_id"`
 	JobStatus   *JobStatus `json:"status"`
+	ScheduledAt time.Time  `json:"scheduled_at,omitempty"`
 }
 
 func (job *Job) MarkAsClaimed() (bool, error) {
@@ -79,6 +81,26 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 		Args:        args,
 		JobStatusID: enqueuedJobStatus.ID,
 	}, Job{Name: name, JobStatusID: enqueuedJobStatus.ID}).Error
+}
+
+func CreateScheduledJob(
+	name string,
+	handler string,
+	args string, scheduledAt time.Time) error {
+
+	scheduledStatus := JobStatus{}
+	err := db.Where("name = ?", SCHEDULED_JOB).First(&scheduledStatus).Error
+	if err != nil {
+		return err
+	}
+
+	return db.Create(&Job{
+		Name:        name,
+		Handler:     handler,
+		Args:        args,
+		JobStatusID: scheduledStatus.ID,
+		ScheduledAt: scheduledAt,
+	}).Error
 }
 
 func FirstJob(status string, claimed bool) (*Job, error) {
@@ -181,4 +203,23 @@ func LastJobLastUpdated(minutesAgo uint, status string) (*Job, error) {
 	}
 
 	return &job, nil
+}
+
+// FirstScheduledJob returns the first 'scheduled' job which has been triggered
+// i.e. scheduled_at <= datetime('now')
+//
+// WARNING: THIS QUERY IS UNIQE TO SQLITE, REMEMBER TO UPDATE IT IF/WHEN
+// OTHER SQL DATABASES ARE SUPPORTED
+func FirstScheduledJob() (*Job, error) {
+	const JOIN_QUERY = "INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id "
+	job := &Job{}
+
+	err := db.Joins(JOIN_QUERY).Where(
+		"job_statuses.name = ? AND datetime(scheduled_at) <= datetime('now')", SCHEDULED_JOB).
+		First(job).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return job, nil
 }
