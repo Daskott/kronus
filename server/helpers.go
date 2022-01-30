@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
+	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,11 +17,13 @@ import (
 
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/models"
+	"github.com/Daskott/kronus/server/pbscheduler"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/utils"
 	"github.com/go-co-op/gocron"
 	"github.com/go-playground/validator"
 	"github.com/gorilla/mux"
+	"gorm.io/gorm"
 )
 
 // ---------------------------------------------------------------------------------//
@@ -220,4 +226,134 @@ func fatalOnError(err error) {
 	if err != nil {
 		logg.Fatal(err)
 	}
+}
+
+// ---------------------------------------------------------------------------------//
+// Sms Helper functions
+// --------------------------------------------------------------------------------//
+
+func handleProbeMsgReply(user models.User, message string) ([]byte, error) {
+	probe, err := user.LastProbe()
+	if err != nil {
+		// If no probe - do nothing
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []byte("<Response />"), nil
+		}
+
+		return []byte{}, err
+	}
+
+	pendingProbe, err := probe.IsPending()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	// If no pending probe - do nothing
+	if !pendingProbe {
+		return []byte("<Response />"), nil
+	}
+
+	// Determine if user probe was 'good' or 'bad' from their reply i.e. message
+	probe.LastResponse = message
+	probeStatusName := probe.StatusFromLastResponse()
+
+	// if unable to determine probe status from msg - save 'LastResponse' & do nothing
+	if probeStatusName == "" {
+		probe.Save()
+		return []byte("<Response />"), nil
+	}
+
+	probeStatus, err := models.FindProbeStatus(probeStatusName)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	probe.ProbeStatusID = probeStatus.ID
+	probe.Save()
+
+	msg := "👍"
+	if probeStatusName == models.BAD_PROBE {
+		msg = "Hang in there! Reaching out to your emergency contact ASAP."
+
+		// Equeue job to send out message to emergency contact
+		workerPool.Perform(work.JobParams{
+			Name:    pbscheduler.EmergencyProbeName(probe.UserID),
+			Handler: pbscheduler.SEND_EMERGENCY_PROBE_HANDLER,
+			Args: map[string]interface{}{
+				"user_id":      probe.UserID,
+				"probe_id":     probe.ID,
+				"probe_status": models.BAD_PROBE,
+			},
+		})
+	}
+
+	msgBytes, _ := xml.Marshal(&TwilioSmsResponse{Message: msg})
+	return msgBytes, nil
+}
+
+func handlePingCmd(input string) ([]byte, error) {
+	outputBuffer := new(bytes.Buffer)
+	pingCmd := flag.NewFlagSet("ping", flag.ContinueOnError)
+	pingCmd.SetOutput(outputBuffer)
+
+	err := pingCmd.Parse(strings.Split(input, " ")[1:])
+	if err != nil {
+		return xml.Marshal(&TwilioSmsResponse{Message: outputBuffer.String()})
+	}
+
+	return xml.Marshal(&TwilioSmsResponse{Message: "PONG!"})
+}
+
+func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
+	var err error
+	outputBuffer := new(bytes.Buffer)
+
+	probeCmd := flag.NewFlagSet("probe", flag.ContinueOnError)
+	probeCmd.SetOutput(outputBuffer)
+
+	inPtr := probeCmd.Int("in", 5, "Minutes from now when probe should be sent, default(5)")
+	retriesPtr := probeCmd.Int("retries", 3, "Number of retries after no response is received, default(3")
+	waitPtr := probeCmd.Int("wait", 10, "The amount of minutes to wait for a response to a probe, default(10)")
+
+	// Parse Arguments without the name of command
+	err = probeCmd.Parse(strings.Split(input, " ")[1:])
+	if err != nil {
+		return xml.Marshal(&TwilioSmsResponse{Message: outputBuffer.String()})
+	}
+
+	err = workerPool.PerformIn(*inPtr*60, work.JobParams{
+		Name:    "send_liveliness_probe",
+		Handler: "send_liveliness_probe",
+		Args: map[string]interface{}{
+			"first_name":           user.FirstName,
+			"last_name":            user.LastName,
+			"user_id":              user.ID,
+			"max_retries":          *retriesPtr,
+			"wait_time_in_minutes": *waitPtr,
+		},
+	})
+	if err != nil {
+		return []byte{}, err
+	}
+
+	// TODO: Include retries
+	return xml.Marshal(&TwilioSmsResponse{Message: fmt.Sprintf("Probe will be sent in %v minutes.", *inPtr)})
+}
+
+func handleHelpCmd(input string) ([]byte, error) {
+	outputBuffer := new(bytes.Buffer)
+	helpCmd := flag.NewFlagSet("help", flag.ContinueOnError)
+	helpCmd.SetOutput(outputBuffer)
+
+	err := helpCmd.Parse(strings.Split(input, " ")[1:])
+	if err != nil {
+		return xml.Marshal(&TwilioSmsResponse{Message: outputBuffer.String()})
+	}
+
+	res := `
+Available Commands:
+	help        Help about any command
+	probe       Ask kronus to check on you in a couple minutes
+	ping    	Health check for the server`
+	return xml.Marshal(&TwilioSmsResponse{Message: res})
 }

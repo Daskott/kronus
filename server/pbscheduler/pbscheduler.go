@@ -201,6 +201,10 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
+	// TODO: How to handle this ? Dynamic probe should still be run even if
+	// liveliness probe is in-active
+	// OR
+	// Have separate function to just send probe
 	if !user.ProbeSettings.Active {
 		logg.Infof("skipping liveliness probe for userID=%v, it's currently disabled", params["user_id"])
 		return nil
@@ -212,6 +216,7 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
+	// TODO: How to handle this ? Should probe run if one is still on-going
 	if lastProbe != nil {
 		isPendingProbe, err := lastProbe.IsPending()
 		if err != nil {
@@ -238,11 +243,11 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 	waitTimeInMinutes := user.ProbeSettings.WaitTimeInMinutes
 	maxRetries := user.ProbeSettings.MaxRetries
 
-	if val, err := strconv.Atoi(fmt.Sprint(params["wait_time_in_minutes"])); err != nil {
+	if val, err := strconv.Atoi(fmt.Sprint(params["wait_time_in_minutes"])); err == nil {
 		waitTimeInMinutes = val
 	}
 
-	if val, err := strconv.Atoi(fmt.Sprint(params["max_retries"])); err != nil {
+	if val, err := strconv.Atoi(fmt.Sprint(params["max_retries"])); err == nil {
 		maxRetries = val
 	}
 
