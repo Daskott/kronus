@@ -321,6 +321,13 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 		return xml.Marshal(&TwilioSmsResponse{Message: outputBuffer.String()})
 	}
 
+	if _, err := user.EmergencyContact(); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return xml.Marshal(&TwilioSmsResponse{Message: "An emergency contact is required to use the 'probe' cmd"})
+		}
+		return []byte{}, err
+	}
+
 	err = workerPool.PerformIn(*inPtr*60, work.JobParams{
 		Name:    "send_liveliness_probe",
 		Handler: "send_liveliness_probe",
