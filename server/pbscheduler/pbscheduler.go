@@ -19,6 +19,7 @@ const (
 	SEND_FOLLOWUP_PROBE_HANDLER     = "send_followup_probe"
 	SEND_EMERGENCY_PROBE_HANDLER    = "send_emergency_probe"
 	ENQUEUE_FOLLOWUP_PROBES_HANDLER = "enqueue_followup_probes"
+	SEND_DYNAMIC_PROBE_HANDLER      = "send_dynamic_probe"
 )
 
 var logg = logger.NewLogger()
@@ -201,10 +202,6 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
-	// TODO: How to handle this ? Dynamic probe should still be run even if
-	// liveliness probe is in-active
-	// OR
-	// Have separate function to just send probe
 	if !user.ProbeSettings.Active {
 		logg.Infof("skipping liveliness probe for userID=%v, it's currently disabled", params["user_id"])
 		return nil
@@ -216,7 +213,6 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
-	// TODO: How to handle this ? Should probe run if one is still on-going
 	if lastProbe != nil {
 		isPendingProbe, err := lastProbe.IsPending()
 		if err != nil {
@@ -239,20 +235,8 @@ func (pScheduler ProbeScheduler) sendLivelinessProbe(params map[string]interface
 		return err
 	}
 
-	// By default use the user's probe_settings
-	waitTimeInMinutes := user.ProbeSettings.WaitTimeInMinutes
-	maxRetries := user.ProbeSettings.MaxRetries
-
-	if val, err := strconv.Atoi(fmt.Sprint(params["wait_time_in_minutes"])); err == nil {
-		waitTimeInMinutes = val
-	}
-
-	if val, err := strconv.Atoi(fmt.Sprint(params["max_retries"])); err == nil {
-		maxRetries = val
-	}
-
 	// Create record of initial probe msg sent to usser in db
-	err = models.CreateProbe(user.ID, waitTimeInMinutes, maxRetries)
+	err = models.CreateProbe(user.ID, user.ProbeSettings.WaitTimeInMinutes, user.ProbeSettings.MaxRetries)
 	if err != nil {
 		logg.Error(err)
 		return err
@@ -296,11 +280,6 @@ func (pScheduler ProbeScheduler) sendEmergencyProbe(params map[string]interface{
 	user, err := models.FindUserBy("id", params["user_id"])
 	if err != nil {
 		return err
-	}
-
-	if !user.ProbeSettings.Active {
-		logg.Infof("skipping emergency probe for userID=%v, probe is currently disabled", params["user_id"])
-		return nil
 	}
 
 	// Set user liveliness probe status to params["probe_status"] i.e. 'unavailable' or 'bad'
@@ -364,9 +343,48 @@ func (pScheduler ProbeScheduler) sendEmergencyProbe(params map[string]interface{
 	return nil
 }
 
+func (pScheduler ProbeScheduler) sendDynamicProbe(params map[string]interface{}) error {
+	user, err := models.FindUserBy("id", params["user_id"])
+	if err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("Hi %v,\n"+
+		"You asked to check on you 🙂. Are you good ? (Y/N)",
+		strings.Title(params["first_name"].(string)))
+	err = pScheduler.sendMessage(user.PhoneNumber, msg)
+	if err != nil {
+		logg.Error(err)
+		return err
+	}
+
+	// By default use the user's probe_settings
+	waitTimeInMinutes, err := strconv.Atoi(fmt.Sprint(params["wait_time_in_minutes"]))
+	if err != nil {
+		waitTimeInMinutes = user.ProbeSettings.WaitTimeInMinutes
+		logg.Warnf("Unabe to use 'wait_time_in_minutes' params: %v", err)
+	}
+
+	maxRetries, err := strconv.Atoi(fmt.Sprint(params["max_retries"]))
+	if err != nil {
+		maxRetries = user.ProbeSettings.MaxRetries
+		logg.Warnf("Unabe to use 'max_retries' params: %v", err)
+	}
+
+	// Create record of probe msg sent to user in db
+	err = models.CreateProbe(user.ID, waitTimeInMinutes, maxRetries)
+	if err != nil {
+		logg.Error(err)
+		return err
+	}
+
+	return nil
+}
+
 // ---------------------------------------------------------------------------------//
 // Helper functions
 // --------------------------------------------------------------------------------//
+
 func (probeScheduler *ProbeScheduler) registerWorkerHandlers() error {
 	err := probeScheduler.workerPoolAdapter.Register(SEND_LIVELINESS_PROBE_HANDLER, probeScheduler.sendLivelinessProbe)
 	if err != nil {
@@ -387,6 +405,12 @@ func (probeScheduler *ProbeScheduler) registerWorkerHandlers() error {
 	if err != nil {
 		return err
 	}
+
+	err = probeScheduler.workerPoolAdapter.Register(SEND_DYNAMIC_PROBE_HANDLER, probeScheduler.sendDynamicProbe)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

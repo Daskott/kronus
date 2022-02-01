@@ -329,8 +329,8 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 	}
 
 	err = workerPool.PerformIn(*inPtr*60, work.JobParams{
-		Name:    "send_liveliness_probe",
-		Handler: "send_liveliness_probe",
+		Name:    pbscheduler.SEND_DYNAMIC_PROBE_HANDLER,
+		Handler: pbscheduler.SEND_DYNAMIC_PROBE_HANDLER,
 		Args: map[string]interface{}{
 			"first_name":           user.FirstName,
 			"last_name":            user.LastName,
