@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Daskott/kronus/server/logger"
 	"github.com/Daskott/kronus/server/models"
@@ -126,8 +125,9 @@ func (pbs ProbeScheduler) initPeriodicFollowupProbesEnqeuer() error {
 }
 
 func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]interface{}) error {
+	noOfEmergencyProbeJobsQueued := 0
 	noOfFollowupProbeJobsQueued := 0
-	probes, _, err := models.FetchProbesByStatus(models.PENDING_PROBE, "", 1)
+	probes, err := models.FetchPendingProbesWithElapsedWait()
 	if err != nil {
 		logg.Error(err)
 		return nil
@@ -137,20 +137,6 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 		jobArgs := make(map[string]interface{})
 		jobArgs["user_id"] = probe.UserID
 		jobArgs["probe_id"] = probe.ID
-
-		// Only send out followup probe after only after 'WaitTimeInMinutes' has
-		// elapsed. Keep doing so until 'MaxRetries'.
-		//
-		// E.g if MaxRetries == 3 && WaitTimeInMinutes = 60:
-		// sendInitialProbe @ 5:OOpm
-		// Follow up 1 will be @ ~6:00pm
-		// Follow up 2 will be @ ~7:00pm
-		// Follow up 3 will be @ ~8:00pm
-		//
-		// And if no respons, @ ~9:00pm send out emergency probe
-		if time.Since(probe.UpdatedAt) < time.Duration(probe.WaitTimeInMinutes)*time.Minute {
-			continue
-		}
 
 		// if max retries is exceeded, send emergency probe
 		if probe.RetryCount >= probe.MaxRetries {
@@ -166,6 +152,7 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 				logg.Error(err)
 			}
 
+			noOfEmergencyProbeJobsQueued++
 			continue
 		}
 
@@ -182,8 +169,8 @@ func (pScheduler ProbeScheduler) enqueueFollowUpsForProbes(params map[string]int
 		noOfFollowupProbeJobsQueued++
 	}
 
-	logg.Infof("%v pending liveliness probe(s) found", len(probes))
-	logg.Infof("%v followup probe job(s) queued", noOfFollowupProbeJobsQueued)
+	logg.Infof("%v pending probe(s), %v emergency probe job(s) queued, %v followup probe job(s) queued",
+		len(probes), noOfEmergencyProbeJobsQueued, noOfFollowupProbeJobsQueued)
 
 	return nil
 }

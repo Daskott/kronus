@@ -104,6 +104,26 @@ func FetchProbesByStatus(status, order string, page int) ([]Probe, *Paging, erro
 	return probes, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
+// FetchPendingProbesWithElapsedWait returns all pending probes
+// whose waiting times have expired, with no response from the
+// associated user
+//
+// WARNING: THIS QUERY IS UNIQE TO SQLITE, REMEMBER TO UPDATE IT IF/WHEN
+// OTHER SQL DATABASES ARE SUPPORTED
+func FetchPendingProbesWithElapsedWait() ([]Probe, error) {
+	const JOIN_QUERY = "INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?"
+
+	probes := []Probe{}
+
+	err := db.Joins(JOIN_QUERY, PENDING_PROBE).
+		Where("datetime(probes.updated_at, printf('+%s minute', probes.wait_time_in_minutes)) <= datetime('now')").Find(&probes).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	return probes, nil
+}
+
 func FetchProbes(page int, query interface{}, args ...interface{}) ([]Probe, *Paging, error) {
 	var total int64
 	probes := []Probe{}

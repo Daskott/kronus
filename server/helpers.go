@@ -276,7 +276,7 @@ func handleProbeMsgReply(user models.User, message string) ([]byte, error) {
 		msg = "Hang in there! Reaching out to your emergency contact ASAP."
 
 		// Equeue job to send out message to emergency contact
-		workerPool.Perform(work.JobParams{
+		err = workerPool.Perform(work.JobParams{
 			Name:    pbscheduler.EmergencyProbeName(probe.UserID),
 			Handler: pbscheduler.SEND_EMERGENCY_PROBE_HANDLER,
 			Args: map[string]interface{}{
@@ -285,10 +285,13 @@ func handleProbeMsgReply(user models.User, message string) ([]byte, error) {
 				"probe_status": models.BAD_PROBE,
 			},
 		})
+
+		if err != nil {
+			return []byte{}, err
+		}
 	}
 
-	msgBytes, _ := xml.Marshal(&TwilioSmsResponse{Message: msg})
-	return msgBytes, nil
+	return xml.Marshal(&TwilioSmsResponse{Message: msg})
 }
 
 func handlePingCmd(input string) ([]byte, error) {
@@ -312,7 +315,7 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 	probeCmd.SetOutput(outputBuffer)
 
 	inPtr := probeCmd.Int("in", 5, "Minutes from now when probe should be sent, default(5)")
-	retriesPtr := probeCmd.Int("retries", 3, "Number of retries after no response is received, default(3")
+	retriesPtr := probeCmd.Int("retries", 3, "Number of retries after no response is received, default(3)")
 	waitPtr := probeCmd.Int("wait", 10, "The amount of minutes to wait for a response to a probe, default(10)")
 
 	// Parse Arguments without the name of command
@@ -343,8 +346,8 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 		return []byte{}, err
 	}
 
-	// TODO: Include retries
-	return xml.Marshal(&TwilioSmsResponse{Message: fmt.Sprintf("Probe will be sent in %v minutes.", *inPtr)})
+	return xml.Marshal(&TwilioSmsResponse{Message: fmt.Sprintf(
+		"Probe will be sent in %v minutes & retried %v time(s).", *inPtr, *retriesPtr)})
 }
 
 func handleHelpCmd(input string) ([]byte, error) {
