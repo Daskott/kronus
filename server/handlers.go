@@ -209,13 +209,26 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removeUnknownFields(params, map[string]bool{"active": true, "cron_expression": true})
+	removeUnknownFields(params,
+		map[string]bool{"active": true, "cron_expression": true, "max_retries": true, "wait_time_in_minutes": true})
 	if len(params) <= 0 {
 		writeResponse(rw,
 			ResponsePayload{Errors: []string{"valid fields required"}},
 			http.StatusBadRequest,
 		)
 		return
+	}
+
+	if params["max_retries"] != nil {
+		if err := validate.Var(params["max_retries"], "lte=6"); err != nil {
+			errs = append(errs, "valid 'max_retries' field is required. And it must be <= 6")
+		}
+	}
+
+	if params["wait_time_in_minutes"] != nil {
+		if err := validate.Var(params["wait_time_in_minutes"], "gte=5,lte=120"); err != nil {
+			errs = append(errs, "valid 'wait_time_in_minutes' field is required. And it must be >=5 and <= 120")
+		}
 	}
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
