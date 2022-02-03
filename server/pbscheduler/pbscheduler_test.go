@@ -158,7 +158,7 @@ func TestScheduleProbes(t *testing.T) {
 		})
 	}
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// ---------------------------------------------------------------------------------//
 	// Test emergency probe(s) are sent

@@ -39,7 +39,7 @@ func TestPerformIn(t *testing.T) {
 	workerPool.Start()
 
 	// Wait for job to be processed
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	workerPool.Stop()
 
