@@ -2,6 +2,7 @@ package work
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Daskott/kronus/colors"
@@ -10,13 +11,21 @@ import (
 )
 
 type requeuer struct {
-	stopChan chan struct{}
+	fromQueue string
+	stopChan  chan struct{}
 }
 
-func newRequeuer() *requeuer {
-	return &requeuer{
-		stopChan: make(chan struct{}),
+var supportedQueues = map[string]bool{models.IN_PROGRESS_JOB: true, models.SCHEDULED_JOB: true}
+
+func newRequeuer(fromQueue string) (*requeuer, error) {
+	if !supportedQueues[fromQueue] {
+		return nil, fmt.Errorf("%v is not a supported queue, must be in %v", fromQueue, supportedQueues)
 	}
+
+	return &requeuer{
+		fromQueue: fromQueue,
+		stopChan:  make(chan struct{}),
+	}, nil
 }
 
 // start starts the requeuer loop that pulls jobs from 'in-progress'
@@ -30,26 +39,27 @@ func (r *requeuer) stop() {
 }
 
 func (r *requeuer) loop() {
-	var stuckJob *models.Job
+	var job *models.Job
 	var err error
 
-	sleepBackOff := 30
+	// At some point we may need an expnential back-off,
+	// but for now keep it simple
+	sleepBackOff := 5
 	rateLimiter := time.NewTicker(DefaultTickerDuration)
 	defer rateLimiter.Stop()
 
-	logg.Infof("Starting job requeuer")
+	logg.Infof("Starting %s job requeuer", r.fromQueue)
 	for {
 		select {
 		case <-r.stopChan:
-			logg.Infof("Stopping job requeuer")
+			logg.Infof("Stopping %s job requeuer", r.fromQueue)
 			return
 		case <-rateLimiter.C:
-			stuckJob, err = models.LastJobLastUpdated(30, models.IN_PROGRESS_JOB)
+			job, err = r.nextJob()
 
-			// If no stuck job found, sleep for 'sleepBackOff' minutes
+			// If no job found, sleep for 'sleepBackOff' seconds
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				r.logInfof("no stuck job in in-progress - sleep for %v minutes", sleepBackOff)
-				rateLimiter.Reset(time.Duration(sleepBackOff) * time.Minute)
+				rateLimiter.Reset(time.Duration(sleepBackOff) * time.Second)
 				continue
 			}
 
@@ -60,12 +70,19 @@ func (r *requeuer) loop() {
 			}
 
 			r.logInfof("fetched job with id=%v, status_id=%v, job.claimed=%v",
-				stuckJob.ID, stuckJob.JobStatusID, stuckJob.Claimed)
+				job.ID, job.JobStatusID, job.Claimed)
 
-			r.requeue(stuckJob)
+			r.requeue(job)
 			rateLimiter.Reset(DefaultTickerDuration)
 		}
 	}
+}
+
+func (r *requeuer) nextJob() (*models.Job, error) {
+	if r.fromQueue == models.IN_PROGRESS_JOB {
+		return models.LastJobLastUpdated(10, models.IN_PROGRESS_JOB)
+	}
+	return models.FirstScheduledJobToBeQueued()
 }
 
 func (r *requeuer) requeue(job *models.Job) {
@@ -88,11 +105,11 @@ func (r *requeuer) requeue(job *models.Job) {
 }
 
 func (r *requeuer) logInfof(template string, args ...interface{}) {
-	prefix := colors.Yellow("[job requeuer] ")
+	prefix := colors.Yellow(fmt.Sprintf("[%s job requeuer] ", r.fromQueue))
 	logg.Infof(prefix+template, args...)
 }
 
 func (r *requeuer) logError(args ...interface{}) {
-	prefix := colors.Red("[job requeuer] ")
+	prefix := colors.Red(fmt.Sprintf("[%s job requeuer] ", r.fromQueue))
 	logg.Errorf(prefix, args...)
 }

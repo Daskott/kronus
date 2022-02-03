@@ -20,12 +20,17 @@ type WorkerPoolAdapter struct {
 	useCronParserWithSeconds bool
 }
 
-func NewWorkerAdapter(timeZoneArg string, useCronParserWithSeconds bool) *WorkerPoolAdapter {
+func NewWorkerAdapter(timeZoneArg string, useCronParserWithSeconds bool) (*WorkerPoolAdapter, error) {
+	workerPool, err := newWorkerPool(MAX_CONCURRENCY)
+	if err != nil {
+		return nil, err
+	}
+
 	return &WorkerPoolAdapter{
 		cronScheduler:            cron.NewCronScheduler(timeZoneArg),
-		pool:                     *newWorkerPool(MAX_CONCURRENCY),
+		pool:                     *workerPool,
 		useCronParserWithSeconds: useCronParserWithSeconds,
-	}
+	}, nil
 }
 
 // Start starts the cron scheduler & worker pool
@@ -63,6 +68,19 @@ func (adapter *WorkerPoolAdapter) Perform(job JobParams) error {
 
 	if err != nil {
 		return fmt.Errorf("error enqueuing job: %v, %v", job, err)
+	}
+
+	return nil
+}
+
+// PerformIn sends a job to the 'scheduled' queue
+// to be executed as soon as 'secondsInFuture' has elapsed
+func (adapter *WorkerPoolAdapter) PerformIn(secondsInFuture int, job JobParams) error {
+	logg.Infof("Scheduling job: %v, to run in %v seconds", job, secondsInFuture)
+
+	err := adapter.pool.enqueueIn(secondsInFuture, job)
+	if err != nil {
+		return fmt.Errorf("error scheduling job: %v, %v", job, err)
 	}
 
 	return nil

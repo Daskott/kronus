@@ -17,6 +17,10 @@ type Probe struct {
 	UserID         uint            `json:"user_id" gorm:"not null"`
 	ProbeStatusID  uint            `json:"probe_status_id"`
 	ProbeStatus    *ProbeStatus    `json:"status"`
+
+	// TODO: Remove defaults later & set fields to "not null"
+	MaxRetries        int `json:"max_retries" gorm:"default:3"`
+	WaitTimeInMinutes int `json:"wait_time_in_minutes" gorm:"default:60"`
 }
 
 var ProbeStatusMapToResponse = map[string]map[string]bool{
@@ -100,6 +104,26 @@ func FetchProbesByStatus(status, order string, page int) ([]Probe, *Paging, erro
 	return probes, newPaging(int64(page), MAX_PAGE_SIZE, total), nil
 }
 
+// FetchPendingProbesWithElapsedWait returns all pending probes
+// whose waiting times have expired, with no response from the
+// associated user
+//
+// WARNING: THIS QUERY IS UNIQE TO SQLITE, REMEMBER TO UPDATE IT IF/WHEN
+// OTHER SQL DATABASES ARE SUPPORTED
+func FetchPendingProbesWithElapsedWait() ([]Probe, error) {
+	const JOIN_QUERY = "INNER JOIN probe_statuses ON probe_statuses.id = probes.probe_status_id AND probe_statuses.name = ?"
+
+	probes := []Probe{}
+
+	err := db.Joins(JOIN_QUERY, PENDING_PROBE).
+		Where("datetime(probes.updated_at, printf('+%s minute', probes.wait_time_in_minutes)) <= datetime('now')").Find(&probes).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	return probes, nil
+}
+
 func FetchProbes(page int, query interface{}, args ...interface{}) ([]Probe, *Paging, error) {
 	var total int64
 	probes := []Probe{}
@@ -136,7 +160,7 @@ func FindProbe(id interface{}) (*Probe, error) {
 	return &probe, nil
 }
 
-func CreateProbe(userID interface{}) error {
+func CreateProbe(userID interface{}, waitTimeInMinutes, maxRetries int) error {
 	currentTime := time.Now()
 	pendingProbeStatus := ProbeStatus{}
 	err := db.Where(&ProbeStatus{Name: "pending"}).Find(&pendingProbeStatus).Error
@@ -145,10 +169,12 @@ func CreateProbe(userID interface{}) error {
 	}
 
 	return db.Model(&Probe{}).Create(map[string]interface{}{
-		"user_id":         userID,
-		"probe_status_id": pendingProbeStatus.ID,
-		"created_at":      currentTime,
-		"updated_at":      currentTime,
+		"user_id":              userID,
+		"probe_status_id":      pendingProbeStatus.ID,
+		"wait_time_in_minutes": waitTimeInMinutes,
+		"max_retries":          maxRetries,
+		"created_at":           currentTime,
+		"updated_at":           currentTime,
 	}).Error
 }
 

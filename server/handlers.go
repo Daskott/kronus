@@ -13,8 +13,6 @@ import (
 	"github.com/Daskott/kronus/server/auth"
 	"github.com/Daskott/kronus/server/auth/key"
 	"github.com/Daskott/kronus/server/models"
-	"github.com/Daskott/kronus/server/pbscheduler"
-	"github.com/Daskott/kronus/server/work"
 	"github.com/gorilla/mux"
 
 	"github.com/golang-jwt/jwt"
@@ -211,13 +209,30 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removeUnknownFields(params, map[string]bool{"active": true, "cron_expression": true})
+	removeUnknownFields(params, map[string]bool{
+		"active":               true,
+		"cron_expression":      true,
+		"max_retries":          true,
+		"wait_time_in_minutes": true,
+	})
 	if len(params) <= 0 {
 		writeResponse(rw,
 			ResponsePayload{Errors: []string{"valid fields required"}},
 			http.StatusBadRequest,
 		)
 		return
+	}
+
+	if params["max_retries"] != nil {
+		if err := validate.Var(params["max_retries"], "lte=6"); err != nil {
+			errs = append(errs, "valid 'max_retries' field is required. And it must be <= 6")
+		}
+	}
+
+	if params["wait_time_in_minutes"] != nil {
+		if err := validate.Var(params["wait_time_in_minutes"], "gte=5,lte=120"); err != nil {
+			errs = append(errs, "valid 'wait_time_in_minutes' field is required. And it must be >=5 and <= 120")
+		}
 	}
 
 	if _, ok := params["active"].(bool); params["active"] != nil && !ok {
@@ -495,8 +510,10 @@ func fetchProbesHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	var response []byte
+
 	rw.Header().Set("Content-Type", "text/xml")
+	r.ParseForm()
 
 	message := r.PostForm.Get("Body")
 
@@ -518,75 +535,24 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If it's a server ping from a user on the server - return response
-	if strings.TrimSpace(strings.ToLower(message)) == "ping" {
-		msgBytes, _ := xml.Marshal(&TwilioSmsResponse{Message: "PONG!"})
-		writeSmsWebHookResponse(rw, msgBytes, http.StatusOK)
-		return
+	// Handle sms msgs as CLI commands (if any),
+	// else treat them as responses to probe messages
+	switch firstArg := strings.Split(message, " ")[0]; {
+	case strings.ToLower(firstArg) == "ping":
+		response, err = handlePingCmd(message)
+	case strings.ToLower(firstArg) == "probe":
+		response, err = handleDynamicProbeCmd(user, message)
+	case strings.ToLower(firstArg) == "help":
+		response, err = handleHelpCmd(message)
+	default:
+		response, err = handleProbeMsgReply(*user, message)
 	}
 
-	probe, err := user.LastProbe()
-	if err != nil {
-		// If no probe - do nothing
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
-			return
-		}
-
-		writeErrMsgForSmsWebhook(rw, err)
-		return
-	}
-
-	pendingProbe, err := probe.IsPending()
 	if err != nil {
 		writeErrMsgForSmsWebhook(rw, err)
 		return
 	}
-
-	// If no pending probe - do nothing
-	if !pendingProbe {
-		writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
-		return
-	}
-
-	// Determine if user probe was 'good' or 'bad' from their reply i.e. message
-	probe.LastResponse = message
-	probeStatusName := probe.StatusFromLastResponse()
-
-	// if unable to determine probe status from msg - save 'LastResponse' & do nothing
-	if probeStatusName == "" {
-		probe.Save()
-		writeSmsWebHookResponse(rw, []byte("<Response />"), http.StatusOK)
-		return
-	}
-
-	probeStatus, err := models.FindProbeStatus(probeStatusName)
-	if err != nil {
-		writeErrMsgForSmsWebhook(rw, err)
-		return
-	}
-
-	probe.ProbeStatusID = probeStatus.ID
-	probe.Save()
-
-	msg := "👍"
-	if probeStatusName == models.BAD_PROBE {
-		msg = "Hang in there! Reaching out to your emergency contact ASAP."
-
-		// Equeue job to send out message to emergency contact
-		workerPool.Perform(work.JobParams{
-			Name:    pbscheduler.EmergencyProbeName(probe.UserID),
-			Handler: pbscheduler.SEND_EMERGENCY_PROBE_HANDLER,
-			Args: map[string]interface{}{
-				"user_id":      probe.UserID,
-				"probe_id":     probe.ID,
-				"probe_status": models.BAD_PROBE,
-			},
-		})
-	}
-
-	msgBytes, _ := xml.Marshal(&TwilioSmsResponse{Message: msg})
-	writeSmsWebHookResponse(rw, msgBytes, http.StatusOK)
+	writeSmsWebHookResponse(rw, response, http.StatusOK)
 }
 
 func logInHandler(rw http.ResponseWriter, r *http.Request) {

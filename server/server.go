@@ -65,7 +65,9 @@ func Start(configArg *shared.ServerConfig, devMode bool) {
 	authKeyPair, err = key.NewKeyPairFromRSAPrivateKeyPem(config.Kronus.PrivateKeyPem)
 	fatalOnError(err)
 
-	workerPool = work.NewWorkerAdapter(config.Kronus.Cron.TimeZone, false)
+	workerPool, err = work.NewWorkerAdapter(config.Kronus.Cron.TimeZone, false)
+	fatalOnError(err)
+
 	registerJobHandlers(workerPool)
 	enqueueJobs(workerPool)
 
