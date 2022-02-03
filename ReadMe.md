@@ -392,4 +392,4 @@ For more info see detailed steps https://golang.org/doc/modules/publishing
     - A: If you want it to be, sure. For now, it only sends out messsages to your emergency contacts if bad/no response is recieved by the server. Other extensions or use cases can be addded in the future.
 
 - Q: Why ?
-    - A: Why not ? Its a fun project to level up on `Go`, and design/architecture patterns.
+    - A: Why not ? Its a fun project to level up on `Go`, and some design/architecture patterns.
