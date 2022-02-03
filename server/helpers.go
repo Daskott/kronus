@@ -360,10 +360,14 @@ func handleHelpCmd(input string) ([]byte, error) {
 		return xml.Marshal(&TwilioSmsResponse{Message: outputBuffer.String()})
 	}
 
-	res := `
+	res := `Usage:
+[command]
+
 Available Commands:
-	help        Help about any command
-	probe       Ask kronus to check on you in a couple minutes
-	ping    	Health check for the server`
+  help    Help about any command
+  probe   Ask kronus to check on you in a couple minutes
+  ping    Health check for the serve
+
+Use "[command] --help" for more information about a command.`
 	return xml.Marshal(&TwilioSmsResponse{Message: res})
 }

@@ -14,6 +14,7 @@ Its key features are:
   to see the `status` of the last probe. And based on that, do whatever the
   developer wants.
 
+### CLI Usage
 ```
 Usage:
   kronus [command]
@@ -30,7 +31,22 @@ Flags:
   -v, --version   version for kronus
 
 Use "kronus [command] --help" for more information about a command.
-  ```
+```
+
+### SMS Usage  
+In addition to responding to probe via sms, few commands are
+supported for numbers on the server
+```
+Usage:
+  [command]
+
+Available Commands:
+	help    Help about any command
+	probe   Ask kronus to check on you in a couple minutes
+	ping    Health check for the serve
+
+Use "[command] --help" for more information about a command.
+```
 
 ## Dependencies
 - Install [Go](https://golang.org/dl/)
