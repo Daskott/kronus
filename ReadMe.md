@@ -243,7 +243,9 @@ kronus server --config=config.yml
           "updated_at": "2022-01-10T20:33:16.828639-07:00",
           "user_id": 1,
           "active": true,
-          "cron_expression": "0 18 * * */1"
+          "cron_expression": "0 18 * * */1",
+          "max_retries": 3,
+          "wait_time_in_minutes": 60
       }
   }
   ```

@@ -9,6 +9,7 @@ import (
 	"github.com/Daskott/kronus/server/twilio"
 	"github.com/Daskott/kronus/server/work"
 	"github.com/Daskott/kronus/shared"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestScheduleProbes(t *testing.T) {
@@ -22,9 +23,7 @@ func TestScheduleProbes(t *testing.T) {
 		twilio.NewClient(shared.TwilioConfig{}, "", true),
 		everySecondCronExp,
 	)
-	if err != nil {
-		t.Error(err)
-	}
+	assert.Nil(t, err)
 
 	testUser := &models.User{
 		FirstName:   "tony",
@@ -50,22 +49,20 @@ func TestScheduleProbes(t *testing.T) {
 		Email:              "supreme@avengers.com",
 	}
 
-	models.CreateUser(testUser)
-	if testUser.ID == 0 {
-		t.Fatalf("Unable to create 'testUser' record")
-	}
-	testUser.UpdateProbSettings(map[string]interface{}{"active": true, "cron_expression": everySecondCronExp})
+	err = models.CreateUser(testUser)
+	assert.Nil(t, err, "Should create 'testUser' record")
 
-	models.CreateUser(testUser2)
-	if testUser2.ID == 0 {
-		t.Fatalf("Unable to create 'testUser2' record")
-	}
-	testUser2.UpdateProbSettings(map[string]interface{}{"active": true, "cron_expression": everySecondCronExp})
+	err = models.CreateUser(testUser2)
+	assert.Nil(t, err, "Should create 'testUser2' record")
+
+	err = testUser.UpdateProbSettings(map[string]interface{}{"active": true, "cron_expression": everySecondCronExp})
+	assert.Nil(t, err)
+
+	err = testUser2.UpdateProbSettings(map[string]interface{}{"active": true, "cron_expression": everySecondCronExp})
+	assert.Nil(t, err)
 
 	err = testUser2.AddContact(testUser2Contact)
-	if testUser2Contact.ID == 0 {
-		t.Fatalf("Unable to create 'testUser2Contact' record, err: %v", err)
-	}
+	assert.Nil(t, err, "Should create 'testUser2' Contact")
 
 	// ScheduleProbes & start job worker to process probes
 	pbScheduler.ScheduleProbes()
@@ -111,9 +108,7 @@ func TestScheduleProbes(t *testing.T) {
 				probe.LastResponse = "Yeah"
 				probeStatusName := probe.StatusFromLastResponse()
 				probeStatus, err := models.FindProbeStatus(probeStatusName)
-				if err != nil {
-					t.Fatalf("could not fetch probe status: %v", err)
-				}
+				assert.Nil(t, err, "Should fetch probe status")
 
 				probe.ProbeStatusID = probeStatus.ID
 				probe.Save()
@@ -145,22 +140,19 @@ func TestScheduleProbes(t *testing.T) {
 
 		t.Run(desc, func(t *testing.T) {
 			probes, _, err := models.FetchProbes(1, "user_id = ?", tcase.user.ID)
-			if err != nil {
-				t.Fatalf("Failed to fetch probes %v", err)
-			}
+			assert.Nil(t, err)
 
 			probe := probes[0]
-			if probe.RetryCount != tcase.expectedProbeRetries {
-				t.Errorf("Expected user probe to have %v retry, got %v",
-					tcase.expectedProbeRetries, probe.RetryCount)
-			}
+			assert.Equal(t, tcase.expectedProbeRetries, probe.RetryCount)
 
 			// Set probe retries to max_retries to simulate
 			// no reply from user with > 1 followup [setup for next test]
 			if tcase.expectedProbeRetries > 0 {
-				probe.Update(map[string]interface{}{
+				err = probe.Update(map[string]interface{}{
 					"retry_count": probe.MaxRetries,
 					"updated_at":  probe.UpdatedAt.Add(-time.Hour)})
+				assert.Nil(t, err)
+
 			}
 		})
 	}
@@ -191,9 +183,7 @@ func TestScheduleProbes(t *testing.T) {
 
 		t.Run(desc, func(t *testing.T) {
 			probes, _, err := models.FetchProbes(1, "user_id = ?", tcase.user.ID)
-			if err != nil {
-				t.Fatalf("Failed to fetch probes %v", err)
-			}
+			assert.Nil(t, err)
 
 			probe := probes[0]
 			if !tcase.expectedToHaveEmergencyProbe && probe.EmergencyProbe != nil {
