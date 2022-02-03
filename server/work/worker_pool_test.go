@@ -35,4 +35,6 @@ func TestEnqueueIn(t *testing.T) {
 	assert.Equal(t, "suits", job.Name, "The job name should match the expected job name")
 	assert.Contains(t, job.Args, "mike", "Should contain the correct arg values")
 	assert.Equal(t, models.SCHEDULED_JOB, job.JobStatus.Name, "The job should be in scheduled queue")
+	assert.False(t, job.AddToQueueAt.IsZero(), "should set time when job should be enqueued")
+	assert.True(t, job.EnqueuedAt.IsZero(), "should NOT set time when job was enqueued - yet")
 }

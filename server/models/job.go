@@ -12,15 +12,16 @@ var ErrDuplicateJob = errors.New("job with the given name already exists in queu
 
 type Job struct {
 	BaseModel
-	Fails       int        `json:"fails"`
-	Name        string     `json:"name"`
-	Handler     string     `json:"handler"`
-	Args        string     `json:"args"`
-	LastError   string     `json:"last_error"`
-	Claimed     bool       `json:"claimed" gorm:"default:false"`
-	JobStatusID uint       `json:"job_status_id"`
-	JobStatus   *JobStatus `json:"status"`
-	ScheduledAt time.Time  `json:"scheduled_at,omitempty"`
+	Fails        int        `json:"fails"`
+	Name         string     `json:"name"`
+	Handler      string     `json:"handler"`
+	Args         string     `json:"args"`
+	LastError    string     `json:"last_error"`
+	Claimed      bool       `json:"claimed" gorm:"default:false"`
+	JobStatusID  uint       `json:"job_status_id"`
+	JobStatus    *JobStatus `json:"status"`
+	EnqueuedAt   time.Time  `json:"enqueued_at,omitempty"`
+	AddToQueueAt time.Time  `json:"add_to_queue_at,omitempty"`
 }
 
 func (job *Job) MarkAsClaimed() (bool, error) {
@@ -81,13 +82,14 @@ func CreateUniqueJobByName(name string, handler string, args string) error {
 		Handler:     handler,
 		Args:        args,
 		JobStatusID: enqueuedJobStatus.ID,
+		EnqueuedAt:  time.Now(),
 	}, Job{Name: name, JobStatusID: enqueuedJobStatus.ID}).Error
 }
 
 func CreateScheduledJob(
 	name string,
 	handler string,
-	args string, scheduledAt time.Time) error {
+	args string, addToQueueAt time.Time) error {
 
 	scheduledStatus := JobStatus{}
 	err := db.Where("name = ?", SCHEDULED_JOB).First(&scheduledStatus).Error
@@ -96,11 +98,11 @@ func CreateScheduledJob(
 	}
 
 	return db.Create(&Job{
-		Name:        name,
-		Handler:     handler,
-		Args:        args,
-		JobStatusID: scheduledStatus.ID,
-		ScheduledAt: scheduledAt,
+		Name:         name,
+		Handler:      handler,
+		Args:         args,
+		JobStatusID:  scheduledStatus.ID,
+		AddToQueueAt: addToQueueAt,
 	}).Error
 }
 
@@ -216,7 +218,7 @@ func FirstScheduledJobToBeQueued() (*Job, error) {
 	job := &Job{}
 
 	err := db.Joins(JOIN_QUERY).
-		Where("job_statuses.name = ? AND datetime(scheduled_at) <= datetime('now')", SCHEDULED_JOB).
+		Where("job_statuses.name = ? AND datetime(add_to_queue_at) <= datetime('now')", SCHEDULED_JOB).
 		Preload("JobStatus").First(job).Error
 	if err != nil {
 		return nil, err

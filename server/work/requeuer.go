@@ -95,6 +95,7 @@ func (r *requeuer) requeue(job *models.Job) {
 	update := make(map[string]interface{})
 	update["claimed"] = false
 	update["job_status_id"] = jobStatus.ID
+	update["enqueued_at"] = time.Now()
 
 	err = job.Update(update)
 	if err != nil {
