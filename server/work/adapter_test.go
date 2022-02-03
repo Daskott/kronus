@@ -12,7 +12,9 @@ import (
 func TestPerformIn(t *testing.T) {
 	models.InitializeTestDb()
 
-	workerPool := NewWorkerAdapter("UTC", true)
+	workerPool, err := NewWorkerAdapter("UTC", true)
+	assert.Nil(t, err)
+
 	outputBuffer := new(bytes.Buffer)
 	outStr := outputBuffer.String()
 
@@ -23,7 +25,7 @@ func TestPerformIn(t *testing.T) {
 	}
 	workerPool.Register("write_to_buffer", writeToBuffer)
 
-	err := workerPool.PerformIn(2, JobParams{
+	err = workerPool.PerformIn(2, JobParams{
 		Name:    "write_to_buffer",
 		Handler: "write_to_buffer",
 		Args:    map[string]interface{}{},

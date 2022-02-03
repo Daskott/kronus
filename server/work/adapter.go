@@ -20,12 +20,17 @@ type WorkerPoolAdapter struct {
 	useCronParserWithSeconds bool
 }
 
-func NewWorkerAdapter(timeZoneArg string, useCronParserWithSeconds bool) *WorkerPoolAdapter {
+func NewWorkerAdapter(timeZoneArg string, useCronParserWithSeconds bool) (*WorkerPoolAdapter, error) {
+	workerPool, err := newWorkerPool(MAX_CONCURRENCY)
+	if err != nil {
+		return nil, err
+	}
+
 	return &WorkerPoolAdapter{
 		cronScheduler:            cron.NewCronScheduler(timeZoneArg),
-		pool:                     *newWorkerPool(MAX_CONCURRENCY),
+		pool:                     *workerPool,
 		useCronParserWithSeconds: useCronParserWithSeconds,
-	}
+	}, nil
 }
 
 // Start starts the cron scheduler & worker pool

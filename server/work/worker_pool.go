@@ -20,9 +20,17 @@ type workerPool struct {
 	started     bool
 }
 
-func newWorkerPool(concurrency int) *workerPool {
-	retrier, _ := newRequeuer(models.IN_PROGRESS_JOB)
-	scheduler, _ := newRequeuer(models.SCHEDULED_JOB)
+func newWorkerPool(concurrency int) (*workerPool, error) {
+	retrier, err := newRequeuer(models.IN_PROGRESS_JOB)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduler, err := newRequeuer(models.SCHEDULED_JOB)
+	if err != nil {
+		return nil, err
+	}
+
 	wp := workerPool{
 		handlers:    make(map[string]Handler),
 		concurrency: concurrency,
@@ -34,7 +42,7 @@ func newWorkerPool(concurrency int) *workerPool {
 		wp.workers = append(wp.workers, newWorker([]int64{0, 1, 2, 5, 15, 30}))
 	}
 
-	return &wp
+	return &wp, nil
 }
 
 // registerHandler binds a name to a job handler for all workers in pool

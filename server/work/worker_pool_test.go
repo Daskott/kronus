@@ -11,8 +11,10 @@ import (
 func TestEnqueueIn(t *testing.T) {
 	models.InitializeTestDb()
 
-	workerPool := newWorkerPool(MAX_CONCURRENCY)
-	err := workerPool.enqueueIn(1, JobParams{
+	workerPool, err := newWorkerPool(MAX_CONCURRENCY)
+	assert.Nil(t, err)
+
+	err = workerPool.enqueueIn(1, JobParams{
 		Name:    "suits",
 		Handler: "donna",
 		Args: map[string]interface{}{

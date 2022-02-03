@@ -16,7 +16,8 @@ func TestScheduleProbes(t *testing.T) {
 	models.InitializeTestDb()
 
 	everySecondCronExp := "*/1 * * * * *"
-	workerPool := work.NewWorkerAdapter("UTC", true)
+	workerPool, err := work.NewWorkerAdapter("UTC", true)
+	assert.Nil(t, err)
 
 	pbScheduler, err := NewProbeScheduler(
 		workerPool,
