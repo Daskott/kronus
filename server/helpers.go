@@ -369,7 +369,7 @@ Available Commands:
 
   probe   Ask kronus to check on you in a couple minutes
 
-  ping    Health check for the serve
+  ping    Health check for the server
 
 Use "[command] --help" for more information about a command.`
 	return xml.Marshal(&TwilioSmsResponse{Message: res})
