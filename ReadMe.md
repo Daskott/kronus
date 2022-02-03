@@ -43,7 +43,7 @@ Usage:
 Available Commands:
 	help    Help about any command
 	probe   Ask kronus to check on you in a couple minutes
-	ping    Health check for the serve
+	ping    Health check for the server
 
 Use "[command] --help" for more information about a command.
 ```
@@ -162,7 +162,9 @@ kronus server --config=config.yml
               "updated_at": "2022-01-10T19:54:53.709185-07:00",
               "user_id": 1,
               "active": false,
-              "cron_expression": "0 18 * * 3"
+              "cron_expression": "0 18 * * 3",
+              "max_retries": 3,
+              "wait_time_in_minutes": 60
           }
       }
   }
