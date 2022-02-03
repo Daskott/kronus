@@ -41,7 +41,7 @@ Usage:
   [command]
 
 Available Commands:
-	help    Help about any command
+	usage   List available commands
 	probe   Ask kronus to check on you in a couple minutes
 	ping    Health check for the server
 

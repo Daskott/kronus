@@ -314,9 +314,9 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 	probeCmd := flag.NewFlagSet("probe", flag.ContinueOnError)
 	probeCmd.SetOutput(outputBuffer)
 
-	inPtr := probeCmd.Int("in", 5, "Minutes from now when probe should be sent, default(5)")
-	retriesPtr := probeCmd.Int("retries", 3, "Number of retries after no response is received, default(3)")
-	waitPtr := probeCmd.Int("wait", 10, "The amount of minutes to wait for a response to a probe, default(10)")
+	inPtr := probeCmd.Int("in", 5, "Minutes 4rm now to check on u")
+	retriesPtr := probeCmd.Int("retries", 3, "No. of retries if no response")
+	waitPtr := probeCmd.Int("wait", 10, "No. of minutes to wait for ur response")
 
 	// Parse Arguments without the name of command
 	err = probeCmd.Parse(strings.Split(input, " ")[1:])
@@ -347,15 +347,16 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 	}
 
 	return xml.Marshal(&TwilioSmsResponse{Message: fmt.Sprintf(
-		"Probe will be sent in %v minutes & retried %v time(s).", *inPtr, *retriesPtr)})
+		"👍. Will check on you in %v minutes & retry %v time(s) if no response, "+
+			"before reaching out to your emergency contact.", *inPtr, *retriesPtr)})
 }
 
 func handleHelpCmd(input string) ([]byte, error) {
 	outputBuffer := new(bytes.Buffer)
-	helpCmd := flag.NewFlagSet("help", flag.ContinueOnError)
-	helpCmd.SetOutput(outputBuffer)
+	usageCmd := flag.NewFlagSet("usage", flag.ContinueOnError)
+	usageCmd.SetOutput(outputBuffer)
 
-	err := helpCmd.Parse(strings.Split(input, " ")[1:])
+	err := usageCmd.Parse(strings.Split(input, " ")[1:])
 	if err != nil {
 		return xml.Marshal(&TwilioSmsResponse{Message: outputBuffer.String()})
 	}
@@ -364,8 +365,10 @@ func handleHelpCmd(input string) ([]byte, error) {
 [command]
 
 Available Commands:
-  help    Help about any command
+  usage   List available commands
+
   probe   Ask kronus to check on you in a couple minutes
+
   ping    Health check for the serve
 
 Use "[command] --help" for more information about a command.`

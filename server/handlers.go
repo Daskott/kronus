@@ -542,7 +542,7 @@ func smsWebhookHandler(rw http.ResponseWriter, r *http.Request) {
 		response, err = handlePingCmd(message)
 	case strings.ToLower(firstArg) == "probe":
 		response, err = handleDynamicProbeCmd(user, message)
-	case strings.ToLower(firstArg) == "help":
+	case strings.ToLower(firstArg) == "usage":
 		response, err = handleHelpCmd(message)
 	default:
 		response, err = handleProbeMsgReply(*user, message)
