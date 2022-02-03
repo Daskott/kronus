@@ -59,8 +59,6 @@ func (r *requeuer) loop() {
 
 			// If no job found, sleep for 'sleepBackOff' seconds
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// TODO: Remove this log
-				r.logInfof("no job in '%s' - sleep for %v seconds", r.fromQueue, sleepBackOff)
 				rateLimiter.Reset(time.Duration(sleepBackOff) * time.Second)
 				continue
 			}
@@ -84,7 +82,7 @@ func (r *requeuer) nextJob() (*models.Job, error) {
 	if r.fromQueue == models.IN_PROGRESS_JOB {
 		return models.LastJobLastUpdated(10, models.IN_PROGRESS_JOB)
 	}
-	return models.FirstScheduledJob()
+	return models.FirstScheduledJobToBeQueued()
 }
 
 func (r *requeuer) requeue(job *models.Job) {

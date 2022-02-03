@@ -43,7 +43,8 @@ func (job *Job) MarkAsClaimed() (bool, error) {
 }
 
 func (job *Job) Update(data map[string]interface{}) error {
-	return db.Model(job).Updates(data).Error
+	// Doing this to make sure only keys in data are updated
+	return db.Model(Job{}).Where("id = ?", job.ID).Updates(data).Error
 }
 
 func CreateUniqueJobByName(name string, handler string, args string) error {
@@ -210,13 +211,13 @@ func LastJobLastUpdated(minutesAgo uint, status string) (*Job, error) {
 //
 // WARNING: THIS QUERY IS UNIQE TO SQLITE, REMEMBER TO UPDATE IT IF/WHEN
 // OTHER SQL DATABASES ARE SUPPORTED
-func FirstScheduledJob() (*Job, error) {
+func FirstScheduledJobToBeQueued() (*Job, error) {
 	const JOIN_QUERY = "INNER JOIN job_statuses ON job_statuses.id = jobs.job_status_id "
 	job := &Job{}
 
-	err := db.Joins(JOIN_QUERY).Where(
-		"job_statuses.name = ? AND datetime(scheduled_at) <= datetime('now')", SCHEDULED_JOB).
-		First(job).Error
+	err := db.Joins(JOIN_QUERY).
+		Where("job_statuses.name = ? AND datetime(scheduled_at) <= datetime('now')", SCHEDULED_JOB).
+		Preload("JobStatus").First(job).Error
 	if err != nil {
 		return nil, err
 	}

@@ -209,8 +209,12 @@ func updateProbeSettingsHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removeUnknownFields(params,
-		map[string]bool{"active": true, "cron_expression": true, "max_retries": true, "wait_time_in_minutes": true})
+	removeUnknownFields(params, map[string]bool{
+		"active":               true,
+		"cron_expression":      true,
+		"max_retries":          true,
+		"wait_time_in_minutes": true,
+	})
 	if len(params) <= 0 {
 		writeResponse(rw,
 			ResponsePayload{Errors: []string{"valid fields required"}},

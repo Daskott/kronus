@@ -240,12 +240,12 @@ func handleProbeMsgReply(user models.User, message string) ([]byte, error) {
 			return []byte("<Response />"), nil
 		}
 
-		return []byte{}, err
+		return nil, err
 	}
 
 	pendingProbe, err := probe.IsPending()
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	// If no pending probe - do nothing
@@ -265,7 +265,7 @@ func handleProbeMsgReply(user models.User, message string) ([]byte, error) {
 
 	probeStatus, err := models.FindProbeStatus(probeStatusName)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	probe.ProbeStatusID = probeStatus.ID
@@ -287,7 +287,7 @@ func handleProbeMsgReply(user models.User, message string) ([]byte, error) {
 		})
 
 		if err != nil {
-			return []byte{}, err
+			return nil, err
 		}
 	}
 
@@ -343,7 +343,7 @@ func handleDynamicProbeCmd(user *models.User, input string) ([]byte, error) {
 		},
 	})
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	return xml.Marshal(&TwilioSmsResponse{Message: fmt.Sprintf(
